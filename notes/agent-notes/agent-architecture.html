@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Architecture | Learning Repository</title>
+    <link rel="icon" href="../../image/favicon.jpg" type="image/png">
+    <link rel="stylesheet" href="../../style.css">
+</head>
+<body class="notes-page">
+<div class="notes-layout">
+    <aside class="notes-sidebar">
+        <h1 class="notes-brand">Agent Notes</h1>
+        <p class="notes-subtitle">Components, behavior, and reliable execution.</p>
+        <div class="notes-home-links">
+            <a href="../../notes-index.html">← Notes index</a>
+            <a href="../../index.html">Home</a>
+        </div>
+        <nav class="notes-nav" aria-label="Agent knowledge points">
+            <h2 class="notes-nav-title">Knowledge Points</h2>
+            <ul>
+                <li><a href="agent-architecture.html" aria-current="page">Agent Architecture</a></li>
+                <li><a href="planning-and-reasoning.html">Planning and Reasoning</a></li>
+                <li><a href="tool-use-and-memory.html">Tool Use and Memory</a></li>
+            </ul>
+        </nav>
+    </aside>
+    <main class="notes-content note-body">
+        <h1>Agent Architecture</h1>
+        <p class="note-meta">Agent Notes · Last updated August 2026</p>
+        <p class="note-lead">An agent couples a model with state, tools, an execution loop, and boundaries that turn predictions into goal-directed behavior.</p>
+
+        <h2>Core loop</h2>
+        <p>A typical loop observes the current state, selects an action, executes it in an environment, records the result, and decides whether to continue. Termination conditions and error handling are architectural components, not afterthoughts.</p>
+
+        <h2>Separation of responsibilities</h2>
+        <p>The planner decides what should happen, the executor performs bounded actions, memory supplies relevant context, and evaluators check progress or policy compliance. Clear boundaries improve testing and security.</p>
+
+        <h2>Design questions</h2>
+        <p>Choose autonomy, state persistence, tool permissions, verification depth, and human checkpoints according to task risk. See <a href="planning-and-reasoning.html">planning and reasoning</a> for action selection and <a href="tool-use-and-memory.html">tool use and memory</a> for execution context.</p>
+
+        <nav class="note-pagination" aria-label="Adjacent notes">
+            <a href="../../notes-index.html">← All categories</a>
+            <a href="planning-and-reasoning.html">Next: Planning and Reasoning →</a>
+        </nav>
+    </main>
+</div>
+</body>
+</html>

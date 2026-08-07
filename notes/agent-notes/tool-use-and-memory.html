@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tool Use and Memory | Learning Repository</title>
+    <link rel="icon" href="../../image/favicon.jpg" type="image/png">
+    <link rel="stylesheet" href="../../style.css">
+</head>
+<body class="notes-page">
+<div class="notes-layout">
+    <aside class="notes-sidebar">
+        <h1 class="notes-brand">Agent Notes</h1>
+        <p class="notes-subtitle">Components, behavior, and reliable execution.</p>
+        <div class="notes-home-links">
+            <a href="../../notes-index.html">← Notes index</a>
+            <a href="../../index.html">Home</a>
+        </div>
+        <nav class="notes-nav" aria-label="Agent knowledge points">
+            <h2 class="notes-nav-title">Knowledge Points</h2>
+            <ul>
+                <li><a href="agent-architecture.html">Agent Architecture</a></li>
+                <li><a href="planning-and-reasoning.html">Planning and Reasoning</a></li>
+                <li><a href="tool-use-and-memory.html" aria-current="page">Tool Use and Memory</a></li>
+            </ul>
+        </nav>
+    </aside>
+    <main class="notes-content note-body">
+        <h1>Tool Use and Memory</h1>
+        <p class="note-meta">Agent Notes · Last updated August 2026</p>
+        <p class="note-lead">Tools extend what an agent can do; memory extends what it can retain. Both require careful selection, validation, and access control.</p>
+
+        <h2>Tool contracts</h2>
+        <p>Each tool needs a clear purpose, typed inputs, predictable outputs, and explicit failure behavior. Before execution, validate arguments and permissions; afterward, treat returned content as data rather than trusted instructions.</p>
+
+        <h2>Memory layers</h2>
+        <p>Working memory holds current-task context, episodic memory records prior interactions, and semantic memory stores durable facts. Retrieval should optimize relevance while preserving provenance and respecting privacy.</p>
+
+        <h2>Security boundary</h2>
+        <p>Use least privilege, confirmation for consequential actions, and audit logs. Memory writes also require validation because poisoned or outdated records can influence future decisions. These controls belong in the <a href="agent-architecture.html">agent architecture</a>.</p>
+
+        <nav class="note-pagination" aria-label="Adjacent notes">
+            <a href="planning-and-reasoning.html">← Previous: Planning and Reasoning</a>
+            <a href="../llm-notes/transformer-architecture.html">Explore: Transformer Architecture →</a>
+        </nav>
+    </main>
+</div>
+</body>
+</html>

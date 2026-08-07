@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pretraining and Fine-Tuning | Learning Repository</title>
+    <link rel="icon" href="../../image/favicon.jpg" type="image/png">
+    <link rel="stylesheet" href="../../style.css">
+</head>
+<body class="notes-page">
+<div class="notes-layout">
+    <aside class="notes-sidebar">
+        <h1 class="notes-brand">LLM Notes</h1>
+        <p class="notes-subtitle">Models, training, alignment, and evaluation.</p>
+        <div class="notes-home-links">
+            <a href="../../notes-index.html">← Notes index</a>
+            <a href="../../index.html">Home</a>
+        </div>
+        <nav class="notes-nav" aria-label="LLM knowledge points">
+            <h2 class="notes-nav-title">Knowledge Points</h2>
+            <ul>
+                <li><a href="transformer-architecture.html">Transformer Architecture</a></li>
+                <li><a href="pretraining-and-finetuning.html" aria-current="page">Pretraining and Fine-Tuning</a></li>
+                <li><a href="alignment-and-evaluation.html">Alignment and Evaluation</a></li>
+            </ul>
+        </nav>
+    </aside>
+    <main class="notes-content note-body">
+        <h1>Pretraining and Fine-Tuning</h1>
+        <p class="note-meta">LLM Notes · Last updated August 2026</p>
+        <p class="note-lead">Pretraining learns broad statistical structure; fine-tuning shapes that capability for tasks, instructions, and behavior.</p>
+
+        <h2>Pretraining objective</h2>
+        <p>Decoder-only language models typically minimize next-token prediction loss over large corpora. Data composition, filtering, deduplication, tokenizer design, and compute allocation all influence the learned distribution.</p>
+
+        <h2>Supervised fine-tuning</h2>
+        <p>Instruction-response examples teach the model how to express existing capabilities in a useful interface. Parameter-efficient methods can adapt a model by training a small number of added or selected parameters.</p>
+
+        <h2>Behavioral tuning</h2>
+        <p>Preference optimization uses comparisons or reward signals to favor desired responses. It complements rather than replaces careful data design and systematic <a href="alignment-and-evaluation.html">alignment evaluation</a>.</p>
+
+        <nav class="note-pagination" aria-label="Adjacent notes">
+            <a href="transformer-architecture.html">← Previous: Transformer Architecture</a>
+            <a href="alignment-and-evaluation.html">Next: Alignment and Evaluation →</a>
+        </nav>
+    </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backpropagation | Learning Repository</title>
+    <link rel="icon" href="../../image/favicon.jpg" type="image/png">
+    <link rel="stylesheet" href="../../style.css">
+</head>
+<body class="notes-page">
+<div class="notes-layout">
+    <aside class="notes-sidebar">
+        <h1 class="notes-brand">Fundamentals of Deep Learning</h1>
+        <p class="notes-subtitle">The core ideas behind modern neural networks.</p>
+        <div class="notes-home-links">
+            <a href="../../notes-index.html">← Notes index</a>
+            <a href="../../index.html">Home</a>
+        </div>
+        <nav class="notes-nav" aria-label="Deep learning fundamentals knowledge points">
+            <h2 class="notes-nav-title">Knowledge Points</h2>
+            <ul>
+                <li><a href="neural-network-basics.html">Neural Network Basics</a></li>
+                <li><a href="backpropagation.html" aria-current="page">Backpropagation</a></li>
+                <li><a href="cnn-and-sequence-models.html">CNNs and Sequence Models</a></li>
+            </ul>
+        </nav>
+    </aside>
+    <main class="notes-content note-body">
+        <h1>Backpropagation</h1>
+        <p class="note-meta">Fundamentals of Deep Learning · Last updated August 2026</p>
+        <p class="note-lead">Backpropagation efficiently applies the chain rule to compute how every differentiable parameter influences the loss.</p>
+
+        <h2>Forward pass</h2>
+        <p>The network computes intermediate values and a final loss. These values form a computational graph that records dependencies between operations.</p>
+
+        <h2>Reverse pass</h2>
+        <p>Starting from the loss, gradients flow backward through local derivatives. Shared paths accumulate gradient contributions, producing one derivative for each parameter.</p>
+
+        <h2>Parameter update</h2>
+        <p>An optimizer uses the gradients to update parameters. Gradient checks, stable activations, normalization, and sensible initialization help diagnose vanishing, exploding, or incorrect gradients.</p>
+
+        <nav class="note-pagination" aria-label="Adjacent notes">
+            <a href="neural-network-basics.html">← Previous: Neural Network Basics</a>
+            <a href="cnn-and-sequence-models.html">Next: CNNs and Sequence Models →</a>
+        </nav>
+    </main>
+</div>
+</body>
+</html>

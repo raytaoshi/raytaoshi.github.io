@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Symmetric Cryptography | Learning Repository</title>
+    <link rel="icon" href="../../image/favicon.jpg" type="image/png">
+    <link rel="stylesheet" href="../../style.css">
+</head>
+<body class="notes-page">
+<div class="notes-layout">
+    <aside class="notes-sidebar">
+        <h1 class="notes-brand">Cryptography Knowledge</h1>
+        <p class="notes-subtitle">Confidentiality, integrity, authenticity, and keys.</p>
+        <div class="notes-home-links">
+            <a href="../../notes-index.html">← Notes index</a>
+            <a href="../../index.html">Home</a>
+        </div>
+        <nav class="notes-nav" aria-label="Cryptography knowledge points">
+            <h2 class="notes-nav-title">Knowledge Points</h2>
+            <ul>
+                <li><a href="symmetric-cryptography.html" aria-current="page">Symmetric Cryptography</a></li>
+                <li><a href="public-key-cryptography.html">Public-Key Cryptography</a></li>
+                <li><a href="hashes-and-signatures.html">Hash Functions and Digital Signatures</a></li>
+            </ul>
+        </nav>
+    </aside>
+    <main class="notes-content note-body">
+        <h1>Symmetric Cryptography</h1>
+        <p class="note-meta">Cryptography Knowledge · Last updated August 2026</p>
+        <p class="note-lead">Symmetric schemes use shared secret key material to protect data efficiently, making key distribution and nonce discipline central concerns.</p>
+
+        <h2>Block and stream constructions</h2>
+        <p>Block ciphers transform fixed-size blocks under a key; secure modes extend them to messages. Stream ciphers generate a keystream that must never be reused with the same key and nonce.</p>
+
+        <h2>Authenticated encryption</h2>
+        <p>Confidentiality alone does not prevent tampering. Authenticated-encryption schemes protect both secrecy and integrity, and can authenticate associated metadata without encrypting it.</p>
+
+        <h2>Operational rules</h2>
+        <p>Use established libraries, unpredictable keys, mode-specific nonces, and explicit key rotation. Shared keys may be established using <a href="public-key-cryptography.html">public-key cryptography</a>.</p>
+
+        <nav class="note-pagination" aria-label="Adjacent notes">
+            <a href="../../notes-index.html">← All categories</a>
+            <a href="public-key-cryptography.html">Next: Public-Key Cryptography →</a>
+        </nav>
+    </main>
+</div>
+</body>
+</html>

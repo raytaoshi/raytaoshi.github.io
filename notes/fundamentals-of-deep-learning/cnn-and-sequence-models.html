@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNNs and Sequence Models | Learning Repository</title>
+    <link rel="icon" href="../../image/favicon.jpg" type="image/png">
+    <link rel="stylesheet" href="../../style.css">
+</head>
+<body class="notes-page">
+<div class="notes-layout">
+    <aside class="notes-sidebar">
+        <h1 class="notes-brand">Fundamentals of Deep Learning</h1>
+        <p class="notes-subtitle">The core ideas behind modern neural networks.</p>
+        <div class="notes-home-links">
+            <a href="../../notes-index.html">← Notes index</a>
+            <a href="../../index.html">Home</a>
+        </div>
+        <nav class="notes-nav" aria-label="Deep learning fundamentals knowledge points">
+            <h2 class="notes-nav-title">Knowledge Points</h2>
+            <ul>
+                <li><a href="neural-network-basics.html">Neural Network Basics</a></li>
+                <li><a href="backpropagation.html">Backpropagation</a></li>
+                <li><a href="cnn-and-sequence-models.html" aria-current="page">CNNs and Sequence Models</a></li>
+            </ul>
+        </nav>
+    </aside>
+    <main class="notes-content note-body">
+        <h1>CNNs and Sequence Models</h1>
+        <p class="note-meta">Fundamentals of Deep Learning · Last updated August 2026</p>
+        <p class="note-lead">Architecture encodes assumptions about data: convolution emphasizes local spatial structure, while sequence models represent ordered dependencies.</p>
+
+        <h2>Convolutional networks</h2>
+        <p>Shared filters scan local receptive fields, giving translation-equivariant feature extraction with fewer parameters than dense layers. Depth expands the effective receptive field and builds hierarchical features.</p>
+
+        <h2>Recurrent sequence models</h2>
+        <p>RNNs update a hidden state over time; gated variants such as LSTMs and GRUs improve long-range gradient flow. They process order naturally but are difficult to parallelize across time steps.</p>
+
+        <h2>Attention-based models</h2>
+        <p>Attention directly connects positions and enables parallel training. Modern language models predominantly use the <a href="../llm-notes/transformer-architecture.html">Transformer architecture</a>.</p>
+
+        <nav class="note-pagination" aria-label="Adjacent notes">
+            <a href="backpropagation.html">← Previous: Backpropagation</a>
+            <a href="../cryptography-knowledge/symmetric-cryptography.html">Explore: Symmetric Cryptography →</a>
+        </nav>
+    </main>
+</div>
+</body>
+</html>
