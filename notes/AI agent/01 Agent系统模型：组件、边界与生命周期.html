@@ -1,10 +1,698 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<title>01 Agent系统模型：组件、边界与生命周期</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="../../image/favicon.jpg" type="image/png">
+    <link rel="stylesheet" href="style.css">
 </head>
-<body>
-<h1>01 Agent系统模型：组件、边界与生命周期</h1>
+<body class="notes-page agent-system-page" id="top">
+<div class="notes-layout">
+    <aside class="notes-sidebar">
+        <h1 class="notes-brand">第二章 Agent 系统模型</h1>
+        <p></p>
+        <div class="notes-home-links">
+            <a href="../../notes-index.html">← Notes index</a>
+            <a href="../../index.html">Home</a>
+        </div>
+        <nav class="notes-nav" aria-label="Agent 系统模型知识点">
+            <h2 class="notes-nav-title">Knowledge Points</h2>
+            <ul>
+                <li><a href="#what-is-agent">1 什么是 Agent？</a></li>
+                <li><a href="#agent-components">2 AI Agent 的核心组件</a></li>
+                <li><a href="#agent-boundaries">3 Agent 的边界</a></li>
+                <li><a href="#agent-lifecycle">4 Agent 的生命周期</a></li>
+                <li><a href="#code">5 一个 Agent 的简易示例</a></li>
+                <li><a href="#references">参考资料</a></li>
+            </ul>
+        </nav>
+    </aside>
+
+    <main class="notes-content note-body">
+        <p class="note-meta">更新于 2026 年 8 月 </p>
+        <p class="note-lead">
+            理解 Agent，不能只盯着大模型。一个可用的 Agent
+            是由模型、上下文、工具、状态、运行时和治理机制共同组成的目标执行系统。本章先回答“它是什么”，再拆开“它由什么构成”，随后划清“它能做、可做和应做的范围”，最后沿一次任务的完整生命周期观察这些部分如何协作。
+        </p>
+
+        <section class="note-section" id="what-is-agent">
+            <h2>1 什么是 Agent？</h2>
+
+            <div class="definition-box">
+                <span class="definition-label">工作定义</span>
+                <p class="definition-sentence">
+                    AI Agent 是一个位于特定环境中、以目标为驱动，能够持续感知状态、规划步骤、调用工具采取行动，并依据反馈调整策略，直至完成、暂停或终止任务的智能系统。
+                </p>
+            </div>
+
+            <p>
+                这个定义中，每个词都在限定 Agent：它不是脱离环境的“万能大脑”，而是在<strong>特定环境</strong>里工作；它接收的是<strong>目标</strong>而不只是一个问句；它可以在多步过程中自主选择下一步；它的行动会改变外部状态；它还必须读取行动结果，再判断是继续、纠错、求助还是停止。可将这种基本能力概括为“感知—决策—行动”，并用持续反馈循环区分
+                Agent 与一次性模型调用。
+            </p>
+            <div class="figure-center">
+                <img src="images/01-Agent结构组成.jpg" alt="Agent 的四个判断问题" width="800">
+            </div>
+
+            <h3>1.1 模型不是 Agent，模型是 Agent 的决策核心</h3>
+            <p>
+                大语言模型擅长理解语言、归纳信息、生成计划和选择工具，但原生模型通常没有持续状态，也不会自己获得真实世界的最新信息，更不能直接发送邮件、改数据库或运行命令。Agent
+                将模型嵌入一个运行系统：运行时负责提供上下文、暴露工具、执行动作、保存状态、校验结果和控制权限。可以把模型理解为“发动机”，Agent
+                则是带有传动、仪表、刹车和道路规则的整车。
+            </p>
+
+            <div class="formula-box" aria-label="Agent 系统构成公式">
+                <p class="formula">Agent = LLM (大脑) + Planning (规划) + Tool use (执行) + Memory (记忆)。</p>
+                <p class="formula-note">模型提供推理能力；其余部分决定这份能力能否稳定、安全地落到真实任务中。</p>
+            </div>
+
+            <h3>1.2 Agent 与 LLM、聊天机器人、工作流的区别</h3>
+            <div class="table-wrap">
+                <table class="note-table">
+                    <thead>
+                    <tr>
+                        <th>形态</th>
+                        <th>驱动方式</th>
+                        <th>路径</th>
+                        <th>外部行动</th>
+                        <th>适合任务</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td>单次 LLM 调用</td>
+                        <td>输入驱动</td>
+                        <td>一次生成，输出即结束</td>
+                        <td>通常没有</td>
+                        <td>改写、摘要、分类、单轮问答</td>
+                    </tr>
+                    <tr>
+                        <td>聊天机器人</td>
+                        <td>对话驱动</td>
+                        <td>由用户逐轮推进</td>
+                        <td>可选，通常较少</td>
+                        <td>咨询、知识问答、交互式辅助</td>
+                    </tr>
+                    <tr>
+                        <td>自动化工作流</td>
+                        <td>规则／事件驱动</td>
+                        <td>开发者预先定义</td>
+                        <td>按固定节点执行</td>
+                        <td>步骤稳定、异常分支可枚举的流程</td>
+                    </tr>
+                    <tr>
+                        <td>AI Agent</td>
+                        <td>目标驱动</td>
+                        <td>运行时动态选择并可调整</td>
+                        <td>通过受控工具执行</td>
+                        <td>信息不完整、需要判断与多步适应的任务</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="callout warning">
+                <span class="callout-title">关键判断：是否真的需要 Agent？</span>
+                <p>
+                    如果任务步骤确定、分支有限、结果必须完全可预测，普通程序或工作流往往更便宜、更快、更可靠。只有当“下一步动作需要依据新信息临场判断”时，Agent
+                    的动态规划和反馈循环才真正产生价值。
+                </p>
+                <span class="callout-title">Agent 的最小闭环：</span>
+                <p>
+                    一个系统即使只调用一次工具，也不一定是 Agent。更实用的判据是：它能否形成<strong>目标 → 感知 → 决策 → 行动
+                    → 观察 → 再决策</strong>的闭环，并在无人逐步指挥的情况下推进至少一段任务。自主性并不等于“全自动”；能够在关键节点主动请求澄清、权限或人工审批，本身也是合格决策的一部分。
+                </p>
+            </div>
+
+
+        </section>
+
+        <section class="note-section" id="agent-components">
+            <h2>2 AI Agent 的核心组件</h2>
+
+            <p>
+                教学上常把 Agent 拆成感知、大脑、规划、工具和记忆五部分。工程落地时，还要补上运行时与治理层：前者让循环真正跑起来，后者保证循环不会越界。五个核心能力加两个支撑能力，构成一个较完整的系统视图。
+            </p>
+            <div class="figure-center">
+                <img src="images/01-Agent五大核心组件.png" alt="Agent 的五大核心组件" width="800">
+            </div>
+
+
+            <div class="component-grid">
+                <article class="component-card core">
+                    <span class="index">01 ·感知层 (Perception) </span>
+                    <h3>感知层的输入经过整合，形成 Agent 的"当前上下文"，送入大脑进行理解和决策。</h3>
+                    <p>把原始输入变成模型此刻能够使用的任务上下文。Agent 在行动之前，必须先"看到"和"听到"外部信息。现代
+                        Agent 已经不限于纯文本输入，而是具备<strong>多模态感知能力</strong>：</p>
+                    <ul>
+                        <li>输入信息：接收文本、图像、语音、结构化数据、日志与环境事件等等</li>
+                        <li>工具返回结果：把上一轮工具结果重新送入下一轮决策。</li>
+                    </ul>
+                </article>
+
+                <article class="component-card core">
+                    <span class="index">02 · 大脑 (Brain) </span>
+                    <h3>模型与决策</h3>
+                    <p>这是 Agent 最核心的部分（比如
+                        GPT-4、Claude、DeepSeek、通义千问）。理解目标，综合当前状态，决定回答、调用工具、追问或停止。</p>
+                    <ul>
+                        <li>意图理解、推理、生成与工具选择。</li>
+                        <li>大脑的"智力天花板"决定了整个 Agent
+                            的上限。同一套工具和规划框架，接入能力更强的基础模型，任务完成质量往往有质的飞跃。
+                        </li>
+                    </ul>
+                </article>
+
+
+                <article class="component-card core">
+                    <span class="index">03 · 工具 (Tools)</span>
+                    <h3>工具与行动</h3>
+                    <p>连接模型与外部世界，对于 AI Agent 来说，工具就是能把决策转化为真实动作的执行单元。</p>
+                    <p>现代大模型通过"函数调用"(Function Calling)机制来使用工具。开发者预先定义工具的名称与参数说明，模型在推理时会以结构化
+                        JSON 的形式输出"我要调用哪个工具、传什么参数"，由外部程序负责真正执行并把结果返回给模型。</p>
+                    <ul>
+                        <li><strong>信息获取</strong>：联网搜索、网页抓取、文档读取、数据库查询，获取模型外部实时、专业信息。
+                        </li>
+                        <li><strong>计算执行</strong>：代码解释器、数学计算引擎、沙箱环境，处理精确计算与程序逻辑任务。</li>
+                        <li><strong>内容生成</strong>：图像生成、语音合成、文档导出，产出非文本类内容。</li>
+                        <li><strong>系统交互</strong>：API接口、邮件、日历、文件操作、消息发送，对接外部系统与真实世界。</li>
+                    </ul>
+                </article>
+                <article class="component-card core">
+                    <span class="index">04 · 规划 (Planning)</span>
+                    <h3>规划与任务分解</h3>
+                    <p>
+                        把高层目标转换为可执行步骤，并在环境变化后修订计划。Agent将复杂大任务拆解成多个子步骤依次执行。</p>
+                    <ul>
+                        <li>静态计划：先规划再执行，适合稳定任务。</li>
+                        <li>动态路由：每步根据状态决定下一条路径。</li>
+                        <li>CoT思维链：分步输出推理，适合数学、逻辑分析。</li>
+                        <li>ReAct：推理和行动交替执行，适配工具调用类动态任务。</li>
+                        <li>ToT思维树：探索多条推理分支，选出最优方案，用于复杂决策、创意任务。</li>
+                        <li>Reflection自我反思：完成任务后审查修正输出，适合代码、长文写作。</li>
+                    </ul>
+                </article>
+                <article class="component-card core">
+                    <span class="index">05 · 记忆 (Memory) </span>
+                    <h3>记忆与状态</h3>
+                    <p>保存“已知什么、做过什么、现在到哪一步”，让多轮执行保持一致，类似记录本。</p>
+                    <ul>
+                        <li><strong>短期记忆(In‑Context Memory)</strong>：当前对话上下文窗口，受模型token窗口限制，保存近期对话信息。
+                        </li>
+                        <li><strong>长期记忆(External Memory)</strong>：跨会话持久存储偏好、资料，依靠向量数据库实现持久化。
+                        </li>
+                        <li><strong>情节记忆(Episodic Memory)</strong>：记录历史任务执行过程，从过往任务经验中学习。</li>
+                        <li><strong>语义记忆(Semantic Memory)</strong>：存储抽象事实知识，可通过RAG动态补充外部知识。</li>
+                        <li>
+                            RAG检索增强生成：主流长期记忆方案，流程：用户提问→向量化检索→召回相关片段→注入上下文→大模型输出回答。
+                        </li>
+                    </ul>
+                </article>
+
+
+            </div>
+
+
+            <h3>2.2 组件失效会怎样？</h3>
+            <div class="table-wrap">
+                <table class="note-table">
+                    <thead>
+                    <tr>
+                        <th>组件</th>
+                        <th>典型失效</th>
+                        <th>可见后果</th>
+                        <th>工程防线</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td>感知／上下文</td>
+                        <td>噪声、过期信息、提示注入、关键事实缺失</td>
+                        <td>从错误前提开始推理</td>
+                        <td>来源分级、检索过滤、脱敏、引用与新鲜度</td>
+                    </tr>
+                    <tr>
+                        <td>模型／规划</td>
+                        <td>误解目标、幻觉、路径漂移</td>
+                        <td>选错动作或反复尝试</td>
+                        <td>结构化输出、任务约束、评估器、最大轮次</td>
+                    </tr>
+                    <tr>
+                        <td>工具</td>
+                        <td>超时、参数错误、重复写入、权限过大</td>
+                        <td>任务失败甚至产生外部损害</td>
+                        <td>Schema 校验、超时、幂等、最小权限、沙箱</td>
+                    </tr>
+                    <tr>
+                        <td>记忆／状态</td>
+                        <td>污染、串会话、丢失、并发覆盖</td>
+                        <td>重复行动、泄露信息、无法恢复</td>
+                        <td>隔离、版本、检查点、事务与保留策略</td>
+                    </tr>
+                    <tr>
+                        <td>运行时／治理</td>
+                        <td>无限循环、绕过审批、不可观测</td>
+                        <td>成本失控且无法追责</td>
+                        <td>熔断、预算、策略引擎、全链路审计</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="note-section" id="agent-boundaries">
+            <h2>3 Agent 的边界</h2>
+
+            <p>
+                Agent 的边界不是一句“不要做危险的事”，而是一组可以在运行时执行的约束。最重要的边界归纳为数据、权限、动作、上下文和责任五类。它们分别回答：Agent
+                能看到什么、能调用什么、最多推进到哪一步、依据哪些信息判断，以及出问题后由谁负责、如何追溯。
+            </p>
+
+            <div class="formula-box" aria-label="Agent 可执行范围公式">
+                <p class="formula">可执行域 = 能力 ∩ 数据访问 ∩ 工具权限 ∩ 动作策略 ∩ 合规责任 ∩ 当前预算</p>
+                <p class="formula-note">
+                    某一步只有同时落在所有边界之内，运行时才应允许执行；<strong>模型具备能力 ≠ 系统允许执行</strong>。</p>
+            </div>
+
+            <h3>3.1 六类Agent边界及含义</h3>
+            <div class="boundary-grid">
+                <article class="boundary-card primary">
+                    <span class="question">数据访问范围</span>
+                    <h3>① 数据边界</h3>
+                    <p>
+                        明确Agent可访问的数据来源、记录范围、字段类型和租户范围。Agent的数据权限应严格继承使用者权限，避免形成跨部门、跨用户的数据越权通道。接入日志、工单、知识库等数据源时，应同步控制敏感信息暴露和集中泄露风险。</p>
+                    <ul>
+                        <li>手机号、密钥、Token、内部IP、客户身份等敏感字段是否完成脱敏处理，避免直接进入上下文。</li>
+                        <li>脱敏方案应保留业务分析所需关联关系，优先采用匿名编号等方式，而非简单字符替换。</li>
+                        <li>部分敏感内容仅允许用于检索，不允许在Agent输出中直接展示。</li>
+                        <li>检索结果需要基于用户身份、租户范围和使用场景进行权限过滤。</li>
+                        <li>明确日志、记忆数据以及第三方供应商侧数据的存储范围和保留周期。</li>
+                    </ul>
+                </article>
+
+                <article class="boundary-card primary">
+                    <span class="question">权限控制范围</span>
+                    <h3>② 权限边界</h3>
+                    <p>
+                        Agent区别于普通问答机器人的核心在于能够调用工具并执行动作。因此需要对工具、资源和执行环境实施最小权限控制，避免查询、配置、变更等能力被无边界开放。</p>
+                    <ul>
+                        <li>工具权限按照只读、建议、提交、执行、禁止执行进行分级管理，避免高风险操作直接自动化。</li>
+                        <li>
+                            查询监控、检索文档、汇总日志等只读能力可以开放；配置修改、扩容、回滚、重启服务等变更操作需要审批或二次确认。
+                        </li>
+                        <li>删除数据、清理目录、切主库等破坏性操作默认禁止交由Agent自动执行。</li>
+                        <li>每个工具需明确允许调用的身份、环境、参数范围、资源额度和执行条件。</li>
+                        <li>临时授权需要具备自动过期、调用记录和完整审计能力。</li>
+                    </ul>
+                </article>
+
+                <article class="boundary-card primary">
+                    <span class="question">自动执行范围</span>
+                    <h3>③ 动作边界</h3>
+                    <p>
+                        拥有工具权限并不意味着Agent可以无限自动执行。需要根据风险等级限定自主推进深度，明确哪些步骤可以自动完成，哪些步骤必须经过人工确认。
+                    </p>
+                    <ul>
+                        <li>低风险、可回滚、结果可验证的动作可以自动执行，例如创建工单、发送通知、生成巡检报告。</li>
+                        <li>涉及配置修改、版本回滚、服务重启等影响范围较大的操作，应经过审批或二次确认。</li>
+                        <li>Agent应优先完成分析、定位和方案建议，再逐步扩大自动执行范围。</li>
+                        <li>自动执行动作需要具备失败处理机制，包括重试、降级、回滚和停止策略。</li>
+                        <li>执行前需明确场景、输入、影响范围和验证方式，避免将人工操作简单替换为机器自动操作。</li>
+                    </ul>
+                </article>
+
+                <article class="boundary-card primary">
+                    <span class="question">上下文使用范围</span>
+                    <h3>④ 上下文边界</h3>
+                    <p>
+                        Agent的判断依赖输入上下文，但信息越多并不代表结果越准确。需要限定可使用的信息来源、时间范围和可信等级，避免过期数据、无关内容或错误信息影响决策。
+                    </p>
+                    <ul>
+                        <li>仅提供与当前任务相关的上下文，例如指定时间窗口、关联日志、指标和文档片段。</li>
+                        <li>日志、知识库、历史对话等内容需要经过筛选、聚合和排序后再提供给Agent。</li>
+                        <li>外部检索内容默认作为参考数据，而不是具有执行优先级的指令。</li>
+                        <li>Agent输出关键判断时，应能够关联对应的日志、指标、Trace或文档依据。</li>
+                        <li>缺少可靠依据时只能给出分析建议，不应直接生成操作结论。</li>
+                    </ul>
+                </article>
+
+                <article class="boundary-card primary">
+                    <span class="question">结果可追溯范围</span>
+                    <h3>⑤ 责任边界</h3>
+                    <p>
+                        Agent是业务流程中的执行组件，不应成为责任缺失的环节。需要明确数据来源、工具调用、决策建议、人工确认和最终结果之间的责任归属，确保问题发生后能够定位原因。
+                    </p>
+                    <ul>
+                        <li>明确操作链路中的角色分工，包括发起人、审批人、执行者和复核人。</li>
+                        <li>完整记录Agent读取的数据、调用的工具、生成的建议、执行的动作和产生的影响。</li>
+                        <li>发生异常时能够区分模型判断错误、数据问题、工具故障或流程缺陷。</li>
+                        <li>关键生产环境操作必须保留审计记录，避免不可追溯的自动化行为。</li>
+                        <li>Agent负责分析和执行流程中的指定环节，不能替代组织责任和人工决策。</li>
+                    </ul>
+                </article>
+
+                <article class="boundary-card">
+                    <span class="question">资源消耗范围</span>
+                    <h3>⑥ 运行边界</h3>
+                    <p>
+                        Agent运行过程中需要限制资源使用范围，包括执行时间、Token消耗、调用次数、并发规模和外部服务访问频率，避免异常循环或资源失控影响系统稳定性。
+                    </p>
+                    <ul>
+                        <li>设置最大执行轮次、推理步骤和自动重试次数，避免无限循环。</li>
+                        <li>限制Token、计算资源和外部调用额度，控制运行成本。</li>
+                        <li>超时或预算耗尽时，应支持保存状态、暂停执行和后续恢复。</li>
+                        <li>任务执行过程应支持用户或调度系统安全取消。</li>
+                        <li>高资源消耗任务需要具备监控、告警和审计能力。</li>
+                    </ul>
+                </article>
+            </div>
+
+            <h3>3.2 Agent自主边界设计</h3>
+
+            <div class="table-wrap">
+                <table class="note-table">
+                    <thead>
+                    <tr>
+                        <th>层次</th>
+                        <th>核心问题</th>
+                        <th>由什么决定</th>
+                        <th>例：生产故障处理</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td>能力边界</td>
+                        <td>模型和工具客观上能完成什么</td>
+                        <td>模型能力、上下文质量、工具能力、任务复杂度</td>
+                        <td>能够读取日志并识别异常模式</td>
+                    </tr>
+                    <tr>
+                        <td>权限边界</td>
+                        <td>当前身份和环境允许执行什么</td>
+                        <td>访问控制、工具策略、租户隔离、环境隔离</td>
+                        <td>可以查看监控，但没有生产配置修改权限</td>
+                    </tr>
+                    <tr>
+                        <td>责任边界</td>
+                        <td>从业务和合规角度是否应该执行</td>
+                        <td>组织流程、法律要求、影响范围、审批机制</td>
+                        <td>可以提出回滚建议，但变更需要负责人批准</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <p>
+                Agent的自主程度应根据风险等级逐步开放，而不是默认完全自动执行。低风险任务通常只涉及读取和分析，例如检索文档、汇总日志、生成报告、创建草稿工单，可以自动执行，但需要权限校验、日志记录和结果验证。
+            </p>
+
+            <p>
+                涉及外部系统写入、但影响有限且可恢复的任务，例如发送外部邮件、提交工单、修改非生产配置，应采用人工确认机制。执行前需要展示影响范围，并具备二次确认、幂等控制和回滚方案。
+            </p>
+
+            <p>
+                对于删除数据、付款、发布生产、修改权限等不可逆或高影响操作，不应直接交由Agent执行，需要职责分离、多人审批、沙箱演练和完整审计。
+            </p>
+
+            <div class="callout success">
+                <span class="callout-title">边界需要由运行机制保障</span>
+                <p>
+                    提示词只能引导模型行为，不能作为真正的安全控制。可靠边界需要通过模型之外的系统实现：工具白名单限制可执行动作，身份系统限制数据范围，Schema限制参数结构，策略引擎判断风险等级，沙箱限制影响范围，审批流程控制高风险步骤，审计日志保留完整证据。
+                </p>
+            </div>
+
+            <p>
+                推荐按照“只读分析 → 生成建议 → 人工确认执行 →
+                少量低风险自动执行”的路径逐步提升自主能力。每提高一级自主性，都应评估任务成功率、误操作风险、回滚能力、运行成本和人工接管体验。
+            </p>
+
+
+        </section>
+
+            <section class="note-section" id="agent-lifecycle">
+                <h2>4 Agent 的生命周期</h2>
+
+                <p>
+                    Agent启动后，其运行期(Runtime）的数据流会严格按照感知(Sense）‑规划(Plan)‑执行（Execute）‑反思（Reflect)的闭环顺序循环流转，直至目标达成或预算耗尽。
+                </p>
+                <div class="figure-center">
+                    <img src="images/01-生命周期流程.svg" alt="Agent生命周期闭环流程图" width="800">
+                </div>
+
+                <h3>详细步骤拆解</h3>
+                <ol>
+                    <li><strong>感知(Sense)</strong>：捕获环境状态变化。</li>
+                    <li><strong>规划(Plan)</strong>：大脑（LLM）结合当前环境、短期记忆与工作记忆，评估当前所处的任务节点，决定下一步是继续拆解任务、调用具体工具，还是直接输出结果。
+                    </li>
+                    <li><strong>执行(Execute)</strong>：执行层接管大模型的 <code>tool_calls</code>
+                        指令，安全地驱动外部工具。环境受工具影响发生改变，并返回硬性的执行反馈。
+                    </li>
+                    <li><strong>反思(Reflect)</strong>：大脑接收到工具执行的硬性反馈后，进行一轮自我审判（如：代码为什么编译报错？API
+                        为什么返回403？）。反思做出的纠错结论会立即写回工作记忆（Working
+                        Memory）。在下一个循环的“规划”阶段，大模型将基于这个更新后的工作记忆调整策略，从而避免在同一个错误上死循环。
+                    </li>
+                </ol>
+            </section>
+
+        <section class="note-section" id="code">
+            <h2>5 一个 Agent 的简易示例</h2>
+            <p>
+                下面的 Mini Agent 使用 Python 标准库演示“感知 → 规划 → 工具执行 → 观察 → 更新记忆”闭环。
+                示例中的 <code>plan()</code> 用规则模拟 LLM 决策；接入真实模型时，可将它替换为 Function Calling。
+            </p>
+            <div class="example-meta" aria-label="示例特点">
+                <span>单文件</span>
+                <span>无第三方依赖</span>
+                <span>包含工具与短期记忆</span>
+            </div>
+
+            <details class="code-example">
+                <summary>
+                    <span class="code-summary-main">
+                        <span class="code-lang">python</span>
+                        <strong class="code-file">mini_agent.py</strong>
+                        <span class="code-caption">完整源码 · 展开查看</span>
+                    </span>
+                    <span class="code-actions">
+                        <button class="copy-btn" type="button" data-copy-target="mini-agent-source"
+                                aria-label="复制 mini_agent.py 源码" aria-live="polite">复制</button>
+                        <span class="code-chevron" aria-hidden="true">⌄</span>
+                    </span>
+                </summary>
+                <div class="code-panel">
+                    <pre><code id="mini-agent-source" class="language-python">import operator
+import re
+
+# ---------- 工具 ----------
+WEATHER = {"北京": "晴，22℃", "上海": "小雨，24℃", "广州": "多云，29℃"}
+OPERATORS = {
+    "+": operator.add,
+    "-": operator.sub,
+    "*": operator.mul,
+    "/": operator.truediv,
+}
+
+
+def get_weather(city):
+    return f"{city}：{WEATHER.get(city, '暂无数据')}"
+
+
+def calculate(a, b, symbol):
+    if symbol == "/" and b == 0:
+        return "计算失败：除数不能为 0"
+    return f"{a} {symbol} {b} = {OPERATORS[symbol](a, b):g}"
+
+
+TOOLS = {
+    "weather": get_weather,
+    "calculator": calculate,
+}
+
+# ---------- 短期记忆 / 工作状态 ----------
+MEMORY = []
+
+
+def plan(state):
+    """用规则模拟 LLM：根据目标或上一轮观察决定下一步。"""
+    if state["observation"] is not None:
+        return {"action": "finish", "answer": state["observation"]}
+
+    goal = state["goal"]
+
+    if "天气" in goal:
+        city = next((name for name in WEATHER if name in goal), "北京")
+        return {"action": "tool", "tool": "weather", "args": {"city": city}}
+
+    match = re.search(r"(-?\d+)\s*([+\-*/])\s*(-?\d+)", goal)
+    if match:
+        a, symbol, b = match.groups()
+        return {
+            "action": "tool",
+            "tool": "calculator",
+            "args": {"a": int(a), "b": int(b), "symbol": symbol},
+        }
+
+    return {"action": "finish", "answer": "我目前可以查询天气或完成四则运算。"}
+
+
+def execute(decision):
+    """运行时根据结构化计划调用工具。"""
+    tool = TOOLS[decision["tool"]]
+    return tool(**decision["args"])
+
+
+def run_agent(goal, max_steps=3):
+    """一个最小可运行的 Sense-Plan-Act-Observe 循环。"""
+    state = {"goal": goal, "observation": None}
+    MEMORY.append({"phase": "sense", "content": goal})
+
+    for step in range(1, max_steps + 1):
+        decision = plan(state)
+        print(f"[{step}] PLAN     {decision}")
+
+        if decision["action"] == "finish":
+            answer = decision["answer"]
+            MEMORY.append({"phase": "finish", "content": answer})
+            print(f"[{step}] FINAL    {answer}")
+            return answer
+
+        try:
+            observation = execute(decision)
+        except Exception as exc:
+            observation = f"工具执行失败：{exc}"
+
+        state["observation"] = observation
+        MEMORY.append({"phase": "observe", "content": observation})
+        print(f"[{step}] OBSERVE  {observation}")
+
+    return "任务因达到最大循环次数而停止。"
+
+
+if __name__ == "__main__":
+    print("Mini Agent 已启动，输入 exit 退出。")
+    while True:
+        user_input = input("\n用户：").strip()
+        if user_input.lower() in {"exit", "quit"}:
+            break
+        run_agent(user_input)</code></pre>
+                </div>
+            </details>
+
+            <details class="code-example output-example">
+                <summary>
+                    <span class="code-summary-main">
+                        <span class="code-lang">output</span>
+                        <strong class="code-file">运行示例</strong>
+                        <span class="code-caption">控制台输出 · 展开查看</span>
+                    </span>
+                    <span class="code-actions">
+                        <button class="copy-btn" type="button" data-copy-target="mini-agent-output"
+                                aria-label="复制运行示例输出" aria-live="polite">复制</button>
+                        <span class="code-chevron" aria-hidden="true">⌄</span>
+                    </span>
+                </summary>
+                <div class="code-panel">
+                    <pre><code id="mini-agent-output">Mini Agent 已启动，输入 exit 退出。
+
+用户：上海天气怎么样
+[1] PLAN     {'action': 'tool', 'tool': 'weather', 'args': {'city': '上海'}}
+[1] OBSERVE  上海：小雨，24℃
+[2] PLAN     {'action': 'finish', 'answer': '上海：小雨，24℃'}
+[2] FINAL    上海：小雨，24℃</code></pre>
+                </div>
+            </details>
+        </section>
+
+            <section class="note-section" id="references">
+                <h2>参考资料</h2>
+                <ol class="sources-list">
+                    <li id="ref-1">
+                        <a href="https://www.runoob.com/ai-agent/ai-agent-intro.html" target="_blank"
+                           rel="noopener noreferrer">菜鸟教程：AI Agent 简介</a>
+                        — Agent 定义、与传统模型的区别、核心特征和 ReAct 循环。
+                    </li>
+                    <li id="ref-2">
+                        <a href="https://www.runoob.com/ai-agent/ai-agent-core.html" target="_blank"
+                           rel="noopener noreferrer">菜鸟教程：AI Agent 核心组件</a>
+                        — 感知、大脑、规划、工具、记忆及 Agent Loop。
+                    </li>
+                    <li id="ref-3">
+                        <a href="https://developer.aliyun.com/article/1748283" target="_blank"
+                           rel="noopener noreferrer">阿里云开发者社区：Agent
+                            上线前，先划好这 5 条边界</a>
+                        — 数据、权限、动作、上下文和责任边界。
+                    </li>
+                    <li id="ref-4">
+                        <a href="https://blog.csdn.net/alwaysrun/article/details/161360918" target="_blank"
+                           rel="noopener noreferrer">CSDN：AI 之智能体 Agent 简介</a>
+                        — 感知—规划—执行—反思闭环、运行时、状态和工程防线。
+                    </li>
+                </ol>
+                <p class="source-note">
+                    说明：本文在上述资料基础上进行了结构化重组与工程化补充，示例与表述为学习笔记式归纳，并非原文逐段转载。资料访问于
+                    2026 年 8 月。
+                </p>
+            </section>
+
+            <a class="back-to-top" href="#top">↑ 返回顶部</a>
+    </main>
+</div>
+<script>
+(function () {
+    function fallbackCopy(text) {
+        var textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        var copied = document.execCommand("copy");
+        textarea.remove();
+        if (!copied) {
+            throw new Error("copy command failed");
+        }
+    }
+
+    async function copyText(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            return;
+        }
+        fallbackCopy(text);
+    }
+
+    document.addEventListener("click", async function (event) {
+        var button = event.target.closest(".copy-btn[data-copy-target]");
+        if (!button) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        var code = document.getElementById(button.dataset.copyTarget);
+        if (!code) {
+            return;
+        }
+
+        var originalLabel = button.dataset.originalLabel || button.textContent;
+        button.dataset.originalLabel = originalLabel;
+
+        try {
+            await copyText(code.textContent.replace(/\n$/, ""));
+            button.textContent = "已复制 ✓";
+            button.classList.add("copied");
+        } catch (error) {
+            button.textContent = "复制失败";
+            button.classList.add("copy-failed");
+        }
+
+        window.setTimeout(function () {
+            button.textContent = originalLabel;
+            button.classList.remove("copied", "copy-failed");
+        }, 1600);
+    });
+})();
+</script>
 </body>
 </html>
