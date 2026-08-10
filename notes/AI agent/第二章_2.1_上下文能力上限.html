@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>第二章 · 2.1 上下文——决定 Agent 能力上限的关键</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="../../image/favicon.jpg" type="image/x-icon">
+</head>
+<body class="notes-page agent-system-page" id="top">
+  <div class="notes-layout">
+    <aside class="notes-sidebar">
+      <h1 class="notes-brand">第二章 上下文工程</h1>
+      <p class="notes-subtitle">《深入理解 AI Agent：设计原理与工程实践》读书笔记 · 2.1</p>
+      <div class="notes-home-links">
+        <a href="../../notes-index.html">← Notes index</a>
+        <a href="../../index.html">Home</a>
+      </div>
+      <nav class="notes-nav" aria-label="上下文能力上限知识点">
+        <h2 class="notes-nav-title">Knowledge Points</h2>
+        <ul>
+          <li><a href="#why-context">1 困境：模型强而业务弱</a></li>
+          <li><a href="#minimum-info">2 Coding Agent 的最低信息需求</a></li>
+          <li><a href="#engineering-vs-organization">3 工程问题，更是组织问题</a></li>
+          <li><a href="#react-formula">4 ReAct 的上下文定义</a></li>
+          <li><a href="#context-delivery">5 上下文以什么形式送抵模型</a></li>
+          <li><a href="#chapter-map">6 本章的知识脉络</a></li>
+          <li><a href="#references">参考资料</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main class="notes-content note-body">
+      <p class="note-meta">更新于 2026 年 8 月</p>
+      <h1>2.1　上下文——决定 Agent 能力上限的关键</h1>
+      <p class="note-lead">
+        大语言模型在标准测试中成绩亮眼，到了实际业务场景却常常让人失望。原因不是模型不够聪明，而是它缺少执行具体任务所必需的<strong>背景信息</strong>——产品架构、业务规则、内部约定。本章的主旨由此展开：<strong>决定 Agent 在业务中发挥价值的，往往不是模型参数量，而是它在每个决策点能获得多少、多精准的上下文。</strong>本节先回答“为什么上下文如此关键”，并给出贯穿全章的理论框架——ReAct 中关于上下文的精确定义。
+      </p>
+
+      <!-- ============ 1. 困境 ============ -->
+      <section class="note-section" id="why-context">
+        <h2>1&nbsp;&nbsp;困境：模型强而业务弱</h2>
+
+        <div class="definition-box" aria-label="核心命题">
+          <span class="definition-label">核心命题</span>
+          <p class="definition-sentence">
+            模型要执行具体任务，需要通用模型根本不知道的背景信息（产品架构、业务规则、内部约定）。上下文的质量，才是 Agent 能力的真正上限。
+          </p>
+        </div>
+
+        <p>
+          设想一位天才工程师加入你的团队：他具备深厚的理论功底和卓越的编程能力，但对你们的产品架构、业务逻辑、技术债务、团队规范一无所知。更糟的是，关键的架构决策散落在不同团队成员的记忆中，代码库也缺乏文档。这位天才即便智力超群，也难以发挥真正的价值——<strong>这恰恰是当前 AI Agent 面临的困境</strong>。
+        </p>
+
+        <div class="callout warning" aria-label="智力只是基础">
+          <span class="callout-title">🧠 智力只是基础，上下文才是关键</span>
+          <p>一个中等能力的模型配上精心组织的上下文，往往能胜过一个顶级模型在信息匮乏下的盲目摸索。<strong>模型本身的智力只是基础。</strong></p>
+        </div>
+      </section>
+
+      <!-- ============ 2. 最低信息需求 ============ -->
+      <section class="note-section" id="minimum-info">
+        <h2>2&nbsp;&nbsp;Coding Agent 的最低信息需求</h2>
+        <p>
+          以一个 Coding Agent 为例：同样是“帮我修复这个 bug”的指令，Agent 拿到的上下文质量直接决定了它能否完成任务。有效工作所需的信息可以归为三类：
+        </p>
+        <div class="component-grid three" aria-label="三类上下文信息">
+          <article class="component-card core">
+            <span class="index">① 实时代码上下文</span>
+            <h3>代码信息</h3>
+            <p>当前代码库的目录结构、各模块的职责划分、核心数据结构的定义、团队的代码规范。</p>
+            <p>没有这些，Agent 写出的代码可能语法正确，但风格与项目格格不入，甚至引入架构层面的冲突。</p>
+          </article>
+          <article class="component-card">
+            <span class="index">② 流程规范</span>
+            <h3>协作规则</h3>
+            <p>Git 分支策略、代码提交规范、代码审查流程、CI/CD 管线的要求。</p>
+            <p>缺少这些，Agent 可能直接往主分支提交未经测试的代码。</p>
+          </article>
+          <article class="component-card">
+            <span class="index">③ 环境信息</span>
+            <h3>运行环境</h3>
+            <p>开发环境的配置、测试数据库的连接地址、测试环境的部署方式、API 密钥的管理方式。</p>
+            <p>没有这些，Agent 在本地能跑通的修复，到了测试环境可能立刻崩溃。</p>
+          </article>
+        </div>
+
+        <p>
+          <strong>这三类信息——代码信息、流程规范、环境信息——构成了 Agent 有效工作的最低信息需求。</strong>
+        </p>
+
+        <div class="callout warning" aria-label="环境信息边界">
+          <span class="callout-title">🔭 澄清：进入上下文的是观察，不是环境本身</span>
+          <p>这里进入上下文的是对环境的<strong>观察、描述或配置</strong>，而不是环境本身。Environment 仍是 Agent 在外部与之交互的对象——上下文承载的是环境信息的表征，而非被交互的实体。</p>
+        </div>
+
+        <p>
+          上下文工程因此成为利用现有模型开发高效 Agent 的关键所在。它不仅仅是往 prompt 里塞更多信息技术问题，而是要<strong>系统性地设计、组织和提供 AI 完成任务所需的全部背景知识</strong>。
+        </p>
+      </section>
+
+      <!-- ============ 3. 组织问题 ============ -->
+      <section class="note-section" id="engineering-vs-organization">
+        <h2>3&nbsp;&nbsp;工程问题，更是组织问题</h2>
+        <p>
+          上下文工程不仅仅是一个技术问题，更是一个<strong>组织问题</strong>。大多数团队的关键知识都是隐性的：架构决策只有老员工记得，业务规则靠口口相传，重要的背景信息锁在私聊记录里。<strong>如果团队本身就是一个信息黑洞，再好的 AI Agent 也无计可施。</strong>
+        </p>
+
+        <h3>范例：对远程工作友好的团队，往往也对 AI Agent 友好</h3>
+        <p>
+          Linux 内核这样的开源项目提供了一个很好的范例：分布在全球的开发者协作维护了三十多年，成功的秘诀是<strong>高度透明、文档驱动的沟通文化</strong>——所有讨论公开进行，每个决策都有详细记录，任何新加入者都能通过阅读历史来理解代码的演化逻辑。这种工作方式天然创造了 AI 友好的环境：信息是公开的、可检索的、结构化的。
+        </p>
+
+        <div class="callout success" aria-label="AI 原生团队">
+          <span class="callout-title">📚 AI 原生团队，首先是一场文档化运动</span>
+          <p>AI Agent 就像一个永远的新员工：给足背景信息，它能干得很好；什么都不告诉它，再聪明也是白搭。<strong>所以构建 AI 原生团队，首先是一场文档化运动，而不只是部署新工具。</strong></p>
+        </div>
+
+        <div class="definition-box" aria-label="业界观点">
+          <span class="definition-label">业界观点 · OpenAI 研究员 翁家翌</span>
+          <p class="definition-sentence">
+            “人和模型一样，最重要的是 Context。”他在 OpenAI 的工作“也没有那么难，如果换一个其他人，如果有他所有的 context，也是能干的”。
+          </p>
+        </div>
+        <ul class="checklist" aria-label="Context 观点的三条推论">
+          <li><strong>Agent 同理</strong>：决定 Agent 价值的不是参数量，而是每个决策点能获得多少、多精准的上下文</li>
+          <li><strong>团队同理</strong>：“团队合作中最大的问题也是 context 的不一致”</li>
+          <li><strong>人机差异同理</strong>：“AI 短时间内无法取代人的最大原因也是 context”——因为 AI 跟人并不在同一个环境里面</li>
+        </ul>
+        <p>
+          这恰恰是上下文工程要解决的核心问题：<strong>如何把 Agent 需要的背景信息系统性地、结构化地送到模型面前。</strong>
+        </p>
+      </section>
+
+      <!-- ============ 4. ReAct 公式 ============ -->
+      <section class="note-section" id="react-formula">
+        <h2>4&nbsp;&nbsp;ReAct：上下文的精确定义</h2>
+        <p>
+          ReAct 被广泛视为基于大语言模型构建 Agent 的奠基性工作之一。论文开篇用一句话把 Agent、Environment、Context 和 Action 的关系连了起来：
+        </p>
+        <div class="formula-box" aria-label="ReAct 定义">
+          <p class="formula">Consider a general setup of an agent interacting with an environment for task solving. At time step t, an agent receives an observation o<sub>t</sub> ∈ 𝒪 from the environment and takes an action a<sub>t</sub> ∈ 𝒜 following some policy π(a<sub>t</sub> | c<sub>t</sub>), where c<sub>t</sub> = (o<sub>1</sub>, a<sub>1</sub>, …, o<sub>t−1</sub>, a<sub>t−1</sub>, o<sub>t</sub>) is the context to the agent.</p>
+          <p class="formula-note">Yao, Shunyu, et al. “ReAct: Synergizing Reasoning and Acting in Language Models.” ICLR, 2023.</p>
+        </div>
+
+        <div class="callout warning" aria-label="定义的关键">
+          <span class="callout-title">💡 这一定义最值得注意的，不是符号本身</span>
+          <p>Agent 的下一步行动取决于<strong>截至当前的完整交互上下文</strong> c<sub>t</sub>，而不只是眼前这一条输入。过去的每一个观察与行动都参与塑造下一步的决策。</p>
+        </div>
+
+        <h3>把符号映射到 LLM Agent</h3>
+        <div class="table-wrap">
+          <table class="note-table">
+            <thead>
+              <tr>
+                <th>ReAct 概念</th>
+                <th>LLM Agent 中的对应物</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>观察 o<sub>t</sub>（来自环境）</td>
+                <td>用户消息、工具执行结果</td>
+              </tr>
+              <tr>
+                <td>行动 a<sub>t</sub>（Agent 采取）</td>
+                <td>模型回复、工具调用请求</td>
+              </tr>
+              <tr>
+                <td>上下文 c<sub>t</sub>（累积历史）</td>
+                <td>观察与行动交替累积形成的<strong>交互历史</strong>（第一章定义的“轨迹”）</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          真实 API 请求还会在这段历史之前放入<strong>系统提示词和工具定义</strong>，共同组成模型本轮实际收到的上下文。
+        </p>
+
+        <div class="definition-box" aria-label="无状态 API">
+          <span class="definition-label">关键约束：API 无状态</span>
+          <p class="definition-sentence">
+            模型 API 本身是无状态的——每次调用都必须由 Agent 框架重新构造足够的上下文。最直接、无损的做法是带上此前的完整消息历史；生产系统也可以做摘要和压缩，但<strong>不能悄悄丢掉决定下一步行动所需的信息</strong>。
+          </p>
+        </div>
+        <p>
+          后文所有上下文布局、状态栏和压缩技术，都可以看作在回答同一个问题：<strong>怎样以更低成本向模型提供一个信息充分的 c<sub>t</sub>？</strong>
+        </p>
+      </section>
+
+      <!-- ============ 5. 上下文如何送抵模型 ============ -->
+      <section class="note-section" id="context-delivery">
+        <h2>5&nbsp;&nbsp;上下文以什么形式送抵模型</h2>
+        <p>
+          那么，这些上下文信息在技术上到底是以什么形式送给大模型的？这引出了全章的结构性框架——<strong>“静态前缀 + 轨迹”</strong>：
+        </p>
+        <div class="boundary-grid" aria-label="静态前缀与轨迹">
+          <article class="boundary-card primary">
+            <span class="question">静态前缀（每一轮都不变）</span>
+            <h3>System Prompt + Tool Definitions</h3>
+            <p>系统提示词与工具定义在对话过程中保持不变，构成上下文最前端的固定部分。</p>
+            <ul>
+              <li><strong>利于 KV Cache</strong>：不变性使前缀可以被缓存复用（2.3 节展开）</li>
+              <li>提示工程（2.4）、Agent Skills（2.5）都围绕这部分做文章</li>
+            </ul>
+          </article>
+          <article class="boundary-card">
+            <span class="question">动态轨迹（随交互不断增长）</span>
+            <h3>user ↔ assistant ↔ tool 结果的累积</h3>
+            <p>对话历史即轨迹，随着每轮交互不断增长，构成上下文的动态部分。</p>
+            <ul>
+              <li><strong>可压缩</strong>：膨胀后可通过压缩策略瘦身（2.7 节展开）</li>
+              <li>Agent 状态栏（2.6）在轨迹末尾注入动态状态</li>
+            </ul>
+          </article>
+        </div>
+        <p>
+          这是第一章“上下文的五个组成部分”在 API 层面的具体样子：系统提示词和工具定义构成静态前缀，用户消息、模型回复和工具执行结果构成动态增长的消息历史。理解了这个结构，就能理解为什么“<strong>前面不能动、后面可以压缩</strong>”。
+        </p>
+      </section>
+
+      <!-- ============ 6. 本章脉络 ============ -->
+      <section class="note-section" id="chapter-map">
+        <h2>6&nbsp;&nbsp;本章的知识脉络</h2>
+        <p>本章后续将围绕这个结构的每一层展开，六条线索环环相扣：</p>
+        <div class="component-grid three" aria-label="本章六条线索">
+          <article class="component-card core">
+            <span class="index">2.2</span>
+            <h3>API 上下文结构</h3>
+            <p>以 Chat Completions 为例拆解每次调用的完整请求构成，掌握后续所有技术的基础。</p>
+          </article>
+          <article class="component-card">
+            <span class="index">2.3</span>
+            <h3>KV Cache</h3>
+            <p>利用静态前缀的不变性加速推理——理解为什么“前面不能动”。</p>
+          </article>
+          <article class="component-card">
+            <span class="index">2.4</span>
+            <h3>提示工程</h3>
+            <p>如何设计好的 System Prompt，并在上下文层面防御提示注入。</p>
+          </article>
+          <article class="component-card">
+            <span class="index">2.5</span>
+            <h3>Agent Skills</h3>
+            <p>如何按需加载专业知识，避免提示词无限膨胀。</p>
+          </article>
+          <article class="component-card">
+            <span class="index">2.6</span>
+            <h3>Agent 状态栏</h3>
+            <p>如何在对话末尾注入动态状态信息，弥补模型无法主动归纳隐式状态的不足。</p>
+          </article>
+          <article class="component-card">
+            <span class="index">2.7</span>
+            <h3>上下文压缩策略</h3>
+            <p>如何在对话历史膨胀时进行智能压缩，让上下文保持高信息密度。</p>
+          </article>
+        </div>
+
+        <div class="callout success" aria-label="本章主线">
+          <span class="callout-title">🗺️ 本章主线</span>
+          <p>给模型看什么、怎么组织，比模型本身有多聪明往往更影响最终结果。<strong>每项技术都是在当前模型能力边界下，用工程手段最大化信息利用效率。</strong></p>
+        </div>
+      </section>
+
+      <!-- ============ 参考资料 ============ -->
+      <section class="note-section" id="references">
+        <h2>参考资料</h2>
+        <div class="sources-list">
+          <ul>
+            <li>Yao, Shunyu, et al. “ReAct: Synergizing Reasoning and Acting in Language Models.” ICLR, 2023. — <a href="https://arxiv.org/abs/2210.03629" target="_blank" rel="noopener">https://arxiv.org/abs/2210.03629</a></li>
+            <li>李博杰，《深入理解 AI Agent：设计原理与工程实践》——第 2 章 2.1 节</li>
+          </ul>
+        </div>
+        <p class="source-note">
+          说明：本页为对原书 2.1 节内容的结构化重组与学习笔记式归纳，示例与表述为笔记式总结，并非原文逐段转载；引文与公式以原书为准。
+        </p>
+      </section>
+
+      <a href="#top" class="back-to-top">↑ 返回顶部</a>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      function copyText(btn, target) {
+        var text = target.innerText;
+        function done(ok) {
+          btn.classList.add(ok ? 'copied' : 'copy-failed');
+          btn.textContent = ok ? '已复制 ✓' : '复制失败';
+          setTimeout(function () {
+            btn.classList.remove('copied', 'copy-failed');
+            btn.textContent = '复制代码';
+          }, 1600);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+        } else {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          try { document.execCommand('copy'); done(true); }
+          catch (e) { done(false); }
+          document.body.removeChild(ta);
+        }
+      }
+      document.querySelectorAll('.copy-btn[data-copy-target]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var target = document.getElementById(btn.getAttribute('data-copy-target'));
+          if (target) copyText(btn, target);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

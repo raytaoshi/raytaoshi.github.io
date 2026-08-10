@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>第二章 · 2.6 Agent 状态栏——通过元信息增强 Agent 轨迹管理</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="../../image/favicon.jpg" type="image/x-icon">
+</head>
+<body class="notes-page agent-system-page" id="top">
+  <div class="notes-layout">
+    <aside class="notes-sidebar">
+      <h1 class="notes-brand">第二章 上下文工程</h1>
+      <p class="notes-subtitle">《深入理解 AI Agent：设计原理与工程实践》读书笔记 · 2.6</p>
+      <div class="notes-home-links">
+        <a href="../../notes-index.html">← Notes index</a>
+        <a href="../../index.html">Home</a>
+      </div>
+      <nav class="notes-nav" aria-label="Agent 状态栏知识点">
+        <h2 class="notes-nav-title">Knowledge Points</h2>
+        <ul>
+          <li><a href="#what-is">1 状态栏是什么</a></li>
+          <li><a href="#theory">2 理论基础（2.6.1）</a></li>
+          <li><a href="#distillation">3 上下文蒸馏：量化结论</a></li>
+          <li><a href="#composition">4 状态栏的构成（2.6.2）</a></li>
+          <li><a href="#position">5 在上下文中的位置（2.6.3）</a></li>
+          <li><a href="#update">6 状态更新的两种实现（2.6.4）</a></li>
+          <li><a href="#techniques">7 实验 2-8：五种状态栏技术</a></li>
+          <li><a href="#references">参考资料</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main class="notes-content note-body">
+      <p class="note-meta">更新于 2026 年 8 月</p>
+      <h1>2.6　Agent 状态栏——通过元信息增强 Agent 轨迹管理</h1>
+      <p class="note-lead">
+        上一节的 Skills 解决的是“Agent 具备哪些可按需加载的能力”；本节讨论另一个独立问题：<strong>如何让 Agent 随时看到任务进度、环境变化和工具调用计数等运行时状态</strong>。Agent 框架把这些动态信息整理成结构化摘要并注入上下文，这种机制称为<strong>Agent 状态栏（Agent Status Bar）</strong>。
+      </p>
+
+      <!-- ============ 1. 状态栏是什么 ============ -->
+      <section class="note-section" id="what-is">
+        <h2>1&nbsp;&nbsp;状态栏是什么</h2>
+        <p>
+          前面讨论的提示工程解决了“给模型什么样的静态指令”的问题。但在实际执行过程中，Agent 还需要<strong>动态地感知自身的状态和任务的进展</strong>。在构建生产级的 Agent 系统时，仅依赖大模型的原生能力往往是不够的。Agent 在执行复杂任务时容易陷入各种陷阱：<strong>无限循环、状态遗忘、任务目标偏离</strong>。这些问题的根源在于 Agent 缺乏对环境当前状态的感知和对任务进展的跟踪能力。Agent 状态栏通过在上下文中嵌入结构化的元信息，为 Agent 提供<strong>自我感知和自我调节的机制</strong>。
+        </p>
+        <div class="definition-box" aria-label="手机状态栏类比">
+          <span class="definition-label">最好的类比：操作系统状态栏</span>
+          <p class="definition-sentence">
+            使用手机时，屏幕顶部始终显示着时间、电量、信号强度、通知数量——这些信息不是 App 的主界面内容，但你随时可以瞥一眼就掌握设备的当前状态。<strong>Agent 状态栏对模型起着完全相同的作用</strong>：它不是对话的主体内容（不属于用户消息、模型输出或工具结果），而是 Agent 框架在上下文末尾持续注入的状态摘要——“你已经打了 3 次电话”、“当前时间是 10:30”、“TODO 还剩 2 项未完成”。模型每次生成新回复时都能“瞥一眼”这些状态，据此做出更准确的决策。
+          </p>
+        </div>
+      </section>
+
+      <!-- ============ 2. 理论基础 ============ -->
+      <section class="note-section" id="theory">
+        <h2>2&nbsp;&nbsp;理论基础：上下文学习更像检索而非推理（2.6.1）</h2>
+        <p>
+          Agent 状态栏之所以有效，源于注意力机制的一个本质特性：<strong>上下文学习更像检索而非推理——模型擅长从已有内容中查找信息，但不擅长主动归纳和总结</strong>。这里说的是模型在单次前向传播中如何消费已经在上下文里的信息，并不否定模型可以通过生成思维链来完成多步思考。
+        </p>
+        <div class="formula-box" aria-label="只有一半的检索引擎">
+          <p class="formula">上下文窗口 = 一台只有一半的检索引擎</p>
+          <p class="formula-note">“检索”这一半非常强——你问什么，注意力就能从成千上万个 token 里把相关原始记录捞出来（相当于把 RAG 内置进每一次前向传播）。但缺了另一半：没有“提炼层”——上下文里的东西从来不会被自动数一遍、建个索引、或就地总结成一条结论；任何“关于这些内容的结论”——一共多少条、有没有超标、进展到哪一步——模型每次要用，都得从原始记录里现算一遍。而“现算一遍”的代价，会随上下文里堆积的内容量 N 一起往上涨。</p>
+        </div>
+
+        <h3>一个实际场景：拨打次数的限制</h3>
+        <p>
+          Agent 需要打电话处理业务，系统提示词要求拨打每个商家不超过 3 次。但打了 3 次之后，Agent 经常数不清到底打了几次，又打了第 4 次，甚至陷入循环反复拨打同一个电话。
+        </p>
+        <div class="callout warning" aria-label="问题根源">
+          <span class="callout-title">🧩 问题的根源</span>
+          <p>关于“已经打了几次”的知识<strong>没有被自动提炼出来</strong>，而是以原始通话记录的形式分散在 KV Cache 的向量表示中。模型每次做决策都必须花费额外的思考 token 去扫描上下文重新统计，这个过程效率极低且错误率很高。</p>
+          <p>而当我们在每个电话的工具调用结果中直接加入重复呼叫次数（如“本次是第 3 次呼叫该商家”），模型就能立即发现已达到限制，不再继续呼叫，错误率大幅降低。</p>
+        </div>
+
+        <div class="definition-box" aria-label="本质">
+          <span class="definition-label">这种机制的本质</span>
+          <p class="definition-sentence">
+            把分散在上下文各处的<strong>隐式状态提炼为可直接使用的显式知识</strong>。原始轨迹中的信息是高度冗余的——大量的 token 中只包含少量关键的状态信息。Agent 状态栏主动提取这些关键状态，以极低的额外 token 成本，呈现出原本需要扫描数千个 token 才能获得的信息。
+          </p>
+        </div>
+
+        <h3>注意力衰减与强制性注意力引导</h3>
+        <p>
+          在长上下文场景中，模型的注意力资源是有限的。随着上下文长度的增加，模型必须在更多的候选内容之间分配注意力，导致关键信息可能无法获得足够的注意力权重。特别是在复杂的 Agent 轨迹中，<strong>早期设定的任务目标和关键约束容易被后续大量的工具调用结果所淹没</strong>。模型会过度关注最近的上下文内容，而对位于上下文中部的信息产生“注意力衰减”现象。
+        </p>
+        <div class="callout success" aria-label="强制注意力引导">
+          <span class="callout-title">🎯 Agent 状态栏通过显式地操纵注意力分配来解决这一问题</span>
+          <p>当我们将关键的元信息以结构化的形式放置在上下文末尾时，这些信息在空间上更接近模型即将生成的新 token，因而能获得更高的注意力权重——<strong>这是一种“强制性的注意力引导”</strong>。</p>
+        </div>
+
+        <h3>实验 2-7 ★★：通过注意力可视化验证 Agent 状态栏的效果</h3>
+        <p>
+          基于 attention_visualization 项目，设计了一个客服 Agent 处理退款请求的对照实验。Agent 已经拨打了 Xfinity 3 次电话，中间穿插了网络搜索。用户追问：“能不能再打电话催促一下？”
+        </p>
+        <div class="boundary-grid" aria-label="对照组">
+          <article class="boundary-card">
+            <span class="question">对照组 A（无状态栏）</span>
+            <h3>注意力高度分散</h3>
+            <p>上下文包含完整的轨迹但没有聚合状态信息。热力图显示注意力分布高度分散，在三次电话调用的区域形成明显的“聚焦点”，思考 token 体现出数数和统计的过程——<strong>模型在从原始信息中做归纳</strong>。</p>
+          </article>
+          <article class="boundary-card primary">
+            <span class="question">对照组 B（有状态栏）</span>
+            <h3>注意力高度集中</h3>
+            <pre><code>&lt;agent_status&gt;
+Current State:
+- Tool call summary: 'phone_call' has been invoked 3 times (Xfinity: 3 times)
+- Constraint check: Maximum calls to Xfinity reached (3/3)
+&lt;/agent_status&gt;</code></pre>
+            <p>注意力高度集中在状态栏信息上，思考过程直接使用已提炼好的信息，不再从原始数据中做统计。对于 Qwen3-0.6B 这样小的模型，对照组 A 经常违反约束继续拨打，而对照组 B 则能稳定地遵从约束。</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ============ 3. 上下文蒸馏 ============ -->
+      <section class="note-section" id="distillation">
+        <h2>3&nbsp;&nbsp;上下文蒸馏：量化结论</h2>
+        <p>
+          实验 2-7 是个小规模的定性演示，给的是直觉。这套“提前算好、直接查一眼”的做法到底有多大用、边界又在哪，笔者和合作者用一个专门的基准量化了一遍——这套做法有个统一的名字，叫<strong>上下文蒸馏（Context Distillation）</strong>，Agent 状态栏是它最日常的形态。结论：
+        </p>
+        <div class="component-grid three" aria-label="蒸馏结论">
+          <article class="component-card core">
+            <span class="index">① 弱模型补回来的是准确率</span>
+            <h3>最弱的几个模型准确率涨 40 到 54 个百分点</h3>
+            <p>一个 2B 的本地小模型在这类任务上甚至直接追平了不带状态栏的前沿大模型。</p>
+          </article>
+          <article class="component-card">
+            <span class="index">② 强模型省下来的是效率</span>
+            <h3>思考量、延迟、花费各降大约一个数量级</h3>
+            <p>同一条状态栏，让每次查询的思考 token 砍掉八九成以上。强模型本来就答得对，省下来的是效率。</p>
+          </article>
+          <article class="component-card">
+            <span class="index">③ 最本质的变化</span>
+            <h3>思考量从随上下文变长到基本恒定</h3>
+            <p>不带状态栏时，每次查询的思考量随上下文变长而持续增长；带上状态栏后，它变得基本恒定。管上下文堆到多长，模型都只是“瞥一眼”那几格状态。</p>
+          </article>
+        </div>
+
+        <h3>“提前算好”的三条经验</h3>
+        <div class="callout warning" aria-label="经验一">
+          <span class="callout-title">⚠️ 一、状态栏要用代码维护，别拿大模型去维护</span>
+          <p>一个很自然的念头是“那我再叫一个 LLM 去读历史、帮我总结出状态栏不就行了”——结果恰恰相反。实验里，一个 20 行的正则函数就能达到“标准答案”级别的准确度；而让前沿大模型去一次性读完整段历史、吐出统计结果，反而在大多数格子上出错，把下游准确率拖得比“根本不用状态栏”还低。<strong>让 LLM 批量统计长历史，等于把“扫描整段上下文”这个原始难题原封不动搬了个家，问题一点没解决</strong>。可行的替代是：能用代码算就用代码算；实在要用 LLM，也要逐条抽取、再由代码汇总，绝不要让它一次性批量统计。</p>
+        </div>
+        <div class="callout warning" aria-label="经验二">
+          <span class="callout-title">🗑 二、不要删掉原始上下文</span>
+          <p>状态栏是对原始上下文的一次<strong>有损投影</strong>——它只提前算了“你预想会被问到”的那些维度。如果状态栏够用（计数、状态跟踪这类任务就是如此），你完全可以把原始记录整段删掉、只留状态栏，省下大把 token；<strong>可只要有一个问题落到了状态栏没算过的维度上，只留状态栏的准确率会断崖式崩塌</strong>。</p>
+        </div>
+        <div class="callout warning" aria-label="经验三">
+          <span class="callout-title">📏 三、把状态栏的准确率当成一线生产指标来盯</span>
+          <p>实验发现：模型几乎无条件地相信状态栏——你写“打了 3 次”，它就当真是 3 次，既不会偷偷去核对，也不会自己重算。这既是状态栏有效的原因，也意味着<strong>状态栏一旦写错，错误会原样传进最终答案</strong>。这也意味着前面提过的状态栏投毒风险值得认真对待。</p>
+        </div>
+
+        <h3>与 Loop 工程的联系</h3>
+        <p>
+          站在这个视角看第一章演进弧线末端的 Loop 工程（第十章将结合多 Agent 协作系统展开），会发现它本质上就是把“交互”这条第三轴工程化：<strong>循环每转一圈之所以有真实的进步，是因为验证环节把外部世界的观测写回了上下文，注入了模型自己想不出来的新信息</strong>；抽掉这一步，循环只是让模型把旧信息在原地翻来覆去地重新排列。业界“循环的瓶颈在验证器，而不在模型”的共识，与“衡量改进的‘尺子’必须扎根真实观测，否则循环会悄无声息地空转”说的是同一件事。
+        </p>
+      </section>
+
+      <!-- ============ 4. 构成 ============ -->
+      <section class="note-section" id="composition">
+        <h2>4&nbsp;&nbsp;Agent 状态栏的构成（2.6.2）</h2>
+        <p>基于上述的理论基础，Agent 状态栏包括以下几种类型的信息：</p>
+        <div class="component-grid three" aria-label="状态栏三类信息">
+          <article class="component-card core">
+            <span class="index">① 任务规划</span>
+            <h3>TODO 列表</h3>
+            <p>当 Agent 处理复杂的多步骤任务时，轨迹会变得很长，Agent 容易过分关注当前的局部子任务，而忘记用户的原始诉求、核心约束以及后续工作。通过引入 TODO 列表将任务分解为清晰的步骤，<strong>放在轨迹末尾不断提醒模型当前的进展和未来的目标，确保行动与总体规划保持一致</strong>。</p>
+          </article>
+          <article class="component-card">
+            <span class="index">② 事件的侧信道信息</span>
+            <h3>Side-channel Information</h3>
+            <p>为每个事件附加元数据——精确的时间、地理位置、距上次 Agent 回复的时间间隔等。<strong>侧信道信息是指不在主要数据通道中传递、但对理解事件很有帮助的辅助信息</strong>。这些信息帮助模型理解事件的时序关系和环境背景，从而做出更符合情境的决策。</p>
+          </article>
+          <article class="component-card">
+            <span class="index">③ 环境当前状态的观察摘要</span>
+            <h3>环境观察</h3>
+            <p>包括动态的环境信息（系统时间、工作目录等）、异常操作提醒（“该工具已被重复调用 N 次”）、以及从隐式状态到显式观察的转换。这一设计原则同样适用于人类界面——CLI 和 GUI 都致力于让用户清晰地感知系统的当前状态。</p>
+          </article>
+        </div>
+        <p>
+          事件的侧信道信息通常随对应事件一起追加；任务规划和环境状态则会随任务推进不断更新。<strong>这些动态信息如何写入会话历史，直接关系到 KV Cache 的代价</strong>，下面结合具体的消息结构展开讨论。
+        </p>
+      </section>
+
+      <!-- ============ 5. 位置 ============ -->
+      <section class="note-section" id="position">
+        <h2>5&nbsp;&nbsp;Agent 状态栏在上下文中的具体位置（2.6.3）</h2>
+        <p>看一个实际构建的消息列表：</p>
+        <details class="code-example">
+          <summary>
+            <span class="code-summary-main">
+              <span class="code-lang">json</span>
+              <strong class="code-file">messages_with_status.json</strong>
+              <span class="code-caption">Agent 状态栏在消息列表中的插入位置 · 展开查看</span>
+            </span>
+            <span class="code-actions">
+              <button type="button" class="copy-btn" data-copy-target="status-position-source">复制代码</button>
+              <span class="code-chevron">⌄</span>
+            </span>
+          </summary>
+          <div class="code-panel">
+            <pre><code id="status-position-source" class="language-json">
+messages: [
+  { role: "system",       content: "You are a customer service assistant..." }   // Fixed (KV Cache)
+  { role: "user",         content: "Help me cancel my Xfinity plan" }            // Original request
+  { role: "assistant", content: null, tool_calls: [...] }                        // Round 1: call
+  { role: "tool",         content: "Call log..." }                              // Round 1: result
+  { role: "assistant", content: null, tool_calls: [...] }                        // Round 2: call again
+  { role: "tool",         content: "Call log..." }                              // Round 2: result
+  ...(more rounds)
+  { role: "user",         content: "Can you call them again to follow up?" }     // User follow-up
+  { role: "user",         content: "<agent_status>                              // Status bar injected
+       Current State:                                                            //  by Agent framework
+       - phone_call invoked 3 times (Xfinity: 3/3 max)                           //  (as a user message)
+       - Current time: 2025-09-14 10:30:45
+       - TODO: [1] Cancel plan (in_progress)
+     </agent_status>" }
+]
+// 模型从此处开始生成 —— 紧邻模型生成位置，获得最高注意力权重
+</code></pre>
+          </div>
+        </details>
+
+        <div class="callout warning" aria-label="关键实现细节">
+          <span class="callout-title">🔑 一个重要的实现细节：user 角色</span>
+          <p>Agent 状态栏在 API 层面实际上是作为一条 <strong>user 角色的消息</strong>插入到上下文末尾的——而不是修改开头的 system 消息。原因正是前面讨论的 KV Cache 约束：修改 system 消息会破坏整个前缀的缓存。</p>
+        </div>
+        <div class="callout success" aria-label="澄清角色混淆">
+          <span class="callout-title">🔎 澄清一个容易混淆的地方</span>
+          <p>这里的 user 角色只是<strong>API 协议层面的技术选择</strong>，并不等同于第一章定义的“来自终端用户的输入”。换句话说，<strong>Harness 是在借用 user 角色这个消息槽位</strong>，向模型注入由 Agent 框架自动生成的系统状态信息——内容并非来自真实用户，只是复用了 user 角色的消息格式来挂到上下文末尾。</p>
+        </div>
+        <p>
+          注意最后一条消息：它的 role 是 user，但内容是 Agent 框架自动生成的元信息，用 <code>&lt;agent_status&gt;</code> 标签包裹以便模型识别其特殊性质。这条消息在上下文的最末尾，紧邻模型即将生成的新 token，因此能获得最高的注意力权重。同时，<strong>因为它是追加而非修改，前面所有已缓存的内容都不受影响</strong>。这个设计正是 KV Cache 核心结论中“动态信息追加末尾、静态信息保持不动”原则在状态栏场景的应用。
+        </p>
+      </section>
+
+      <!-- ============ 6. 两种实现 ============ -->
+      <section class="note-section" id="update">
+        <h2>6&nbsp;&nbsp;状态更新的两种实现与缓存代价（2.6.4）</h2>
+        <p>
+          <strong>“追加不破坏缓存”只在单次注入时成立。</strong>状态是会变的——下一轮 TODO 完成了一项、工具计数加了一次，状态消息就过时了。如何更新它，存在两种实现，各有明确的缓存代价：
+        </p>
+        <div class="boundary-grid" aria-label="两种实现对比">
+          <article class="boundary-card">
+            <span class="question">实现一 · 每轮替换</span>
+            <h3>移除旧状态，追加最新状态</h3>
+            <p>每次 API 调用前，从消息列表中移除上一轮的状态消息，在末尾追加最新状态。这保证了上下文中只有一份状态、永远是最新的。</p>
+            <p><strong>代价</strong>：移除旧状态会使其位置之后的所有缓存失效——这与本章批评的“动态时间戳”是同一个失效机制，区别只在于状态消息位于上下文末尾，失效范围仅限于最近几轮消息，而不是整个前缀。</p>
+          </article>
+          <article class="boundary-card primary">
+            <span class="question">实现二 · 持久追加</span>
+            <h3>状态消息永不删改，每轮末尾追加</h3>
+            <p>状态消息一旦注入就永久留在轨迹中，每轮只在末尾追加新的状态。Claude Code 的 <code>&lt;system-reminder&gt;</code> 采用的就是这种方式——历史状态消息保留在会话记录（transcript）中，从不删改。</p>
+            <p><strong>优势</strong>：对缓存完全友好——所有消息只追加、不修改，前缀始终稳定。<strong>代价</strong>：陈旧的状态会在上下文中累积，既占用 token，也要求模型自己关注“最新一条”状态而忽略已过时的旧状态。</p>
+          </article>
+        </div>
+        <div class="callout success" aria-label="取舍经验法则">
+          <span class="callout-title">⚖️ 取舍的经验法则</span>
+          <ul>
+            <li><strong>状态更新频繁且轨迹很长时，选择实现二</strong>——每轮替换带来的缓存失效会在长轨迹上反复累积，代价远超陈旧状态占用的 token</li>
+            <li><strong>轨迹较短或单条状态消息很大时，选择实现一</strong>——末尾几轮的缓存失效本来就便宜，换来的是上下文的整洁和无歧义</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ============ 7. 五种技术 ============ -->
+      <section class="note-section" id="techniques">
+        <h2>7&nbsp;&nbsp;实验 2-8 ★★：几种好用的 Agent 状态栏技术</h2>
+        <p>
+          agent-status-bar 实验框架实现了五种状态栏技术，每种都可以独立启用或禁用：
+        </p>
+        <div class="table-wrap">
+          <table class="note-table">
+            <thead>
+              <tr>
+                <th>技术</th>
+                <th>做法</th>
+                <th>价值</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>时间戳跟踪</td>
+                <td>以 <code>[2025-09-14 10:30:45]</code> 格式作为前缀添加到用户消息和工具响应中（<strong>注意：不是放在系统提示词中，否则会破坏 KV Cache</strong>）</td>
+                <td>使 Agent 理解时序关系，为调试和审计提供信息；实现时间模拟功能，Agent 可以理解“昨天的文件”和“今天的修改”之间的关系</td>
+              </tr>
+              <tr>
+                <td>工具调用计数器</td>
+                <td>维护全局字典记录每个工具被调用的次数，在响应中标注 “Tool call #3 for 'read_file'”</td>
+                <td>显式计数触发模型的模式识别能力：第一次失败后检查路径，第二次失败后列出目录，第三次就主动放弃并寻找替代方案。<strong>深层价值：实现隐式的成本感知</strong>——Agent 能“意识到”自己在某个操作上已经花费了太多次尝试</td>
+              </tr>
+              <tr>
+                <td>TODO 列表管理</td>
+                <td>借鉴 Manus 的“通过复述操纵注意力”理念，提供 <code>rewrite_todo_list</code> 和 <code>update_todo_status</code> 两个专门工具；每项含唯一标识符、内容、状态（pending/in_progress/completed/cancelled）和时间戳</td>
+                <td>从认知负荷理论看，TODO 列表起到<strong>外部记忆</strong>的作用。实验数据：启用 TODO 的 Agent 平均 15 次迭代完成任务，禁用时需 21 次且经常遗漏子任务</td>
+              </tr>
+              <tr>
+                <td>详细错误信息</td>
+                <td>四层内容：错误类型和描述、完整参数的 JSON、调用栈信息、针对性的修复建议（如 FileNotFoundError 时建议验证路径、检查工作目录、使用绝对路径）</td>
+                <td>启用后，Agent 在错误场景中找到替代方案的成功率从 60% 提升到 95%——<strong>从盲目重试转变为分析性的问题解决</strong></td>
+              </tr>
+              <tr>
+                <td>系统状态感知</td>
+                <td>注入当前时间、工作目录、操作系统类型、Shell 环境和 Python 版本等信息；工作目录在 Agent 执行 cd 后自动更新</td>
+                <td>工作目录跟踪尤其关键——确保后续操作在正确的上下文中执行；操作系统信息使 Agent 做出平台相关决策（Linux 用 apt、macOS 用 brew）</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>涌现效应：协同工作产生超出预期的效果</h3>
+        <ul class="checklist" aria-label="涌现效应">
+          <li><strong>时间戳 + 工具计数器</strong>：使 Agent 能够理解操作的频率和时间分布</li>
+          <li><strong>TODO 列表 + 系统状态</strong>：使 Agent 能根据环境调整任务策略</li>
+          <li><strong>详细错误信息 + 工具计数器</strong>：使 Agent 在多次失败后不仅能改变策略，还能理解失败的原因</li>
+        </ul>
+        <div class="callout success" aria-label="完全启用">
+          <span class="callout-title">🤖 完全启用这些技术的 Agent</span>
+          <p>不再是机械执行指令的工具，而更像是一个<strong>有自我意识的助手</strong>——遇到文件不存在时先检查目录，再列出可用的文件，仍然找不到就在 TODO 中标记 cancelled 并添加替代任务。这种自适应的行为是单独的某一项技术无法实现的。</p>
+        </div>
+        <div class="callout warning" aria-label="实用优点">
+          <span class="callout-title">🔍 一个实用的优点</span>
+          <p>所有元信息都以<strong>人类可读的形式</strong>出现在上下文里，开发者随时可以检查 Agent 拿到了哪些信息、做了什么决定。更重要的是，它对模型<strong>没有侵入性</strong>——不需要微调，直接在任何语言模型上都能起效。</p>
+        </div>
+      </section>
+
+      <!-- ============ 参考资料 ============ -->
+      <section class="note-section" id="references">
+        <h2>参考资料</h2>
+        <div class="sources-list">
+          <ul>
+            <li>Li, Bojie and Noah Shi. “Distill, Don't Retrieve: Inference-Time Context Distillation for LLM Agent Reasoning.” 2026. — <a href="https://01.me/research/context-distillation" target="_blank" rel="noopener">https://01.me/research/context-distillation</a></li>
+            <li>李博杰，《深入理解 AI Agent：设计原理与工程实践》——第 2 章 2.6 节</li>
+          </ul>
+        </div>
+        <p class="source-note">
+          说明：本页为对原书 2.6 节内容的结构化重组与学习笔记式归纳，示例与表述为笔记式总结，并非原文逐段转载。
+        </p>
+      </section>
+
+      <a href="#top" class="back-to-top">↑ 返回顶部</a>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      function copyText(btn, target) {
+        var text = target.innerText;
+        function done(ok) {
+          btn.classList.add(ok ? 'copied' : 'copy-failed');
+          btn.textContent = ok ? '已复制 ✓' : '复制失败';
+          setTimeout(function () {
+            btn.classList.remove('copied', 'copy-failed');
+            btn.textContent = '复制代码';
+          }, 1600);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+        } else {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          try { document.execCommand('copy'); done(true); }
+          catch (e) { done(false); }
+          document.body.removeChild(ta);
+        }
+      }
+      document.querySelectorAll('.copy-btn[data-copy-target]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var target = document.getElementById(btn.getAttribute('data-copy-target'));
+          if (target) copyText(btn, target);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

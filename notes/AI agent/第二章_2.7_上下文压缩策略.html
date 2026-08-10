@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>第二章 · 2.7 上下文压缩策略</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="../../image/favicon.jpg" type="image/x-icon">
+</head>
+<body class="notes-page agent-system-page" id="top">
+  <div class="notes-layout">
+    <aside class="notes-sidebar">
+      <h1 class="notes-brand">第二章 上下文工程</h1>
+      <p class="notes-subtitle">《深入理解 AI Agent：设计原理与工程实践》读书笔记 · 2.7</p>
+      <div class="notes-home-links">
+        <a href="../../notes-index.html">← Notes index</a>
+        <a href="../../index.html">Home</a>
+      </div>
+      <nav class="notes-nav" aria-label="上下文压缩知识点">
+        <h2 class="notes-nav-title">Knowledge Points</h2>
+        <ul>
+          <li><a href="#motivation">1 为什么需要压缩（2.7.1）</a></li>
+          <li><a href="#retrieval">2 检索而非推理（2.7.2）</a></li>
+          <li><a href="#complement">3 压缩与 KV Cache（2.7.3）</a></li>
+          <li><a href="#six-strategies">4 实验 2-9：六种压缩策略对比</a></li>
+          <li><a href="#production">5 生产级分层压缩（2.7.4）</a></li>
+          <li><a href="#principles">6 压缩策略的设计原则（2.7.5）</a></li>
+          <li><a href="#implications">7 对架构设计的启示（2.7.6）</a></li>
+          <li><a href="#isolation">8 隔离优于压缩（2.7.7）</a></li>
+          <li><a href="#summary">9 本章小结（2.8）</a></li>
+          <li><a href="#thinking">10 深度思考 · 思考题</a></li>
+          <li><a href="#references">参考资料</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main class="notes-content note-body">
+      <p class="note-meta">更新于 2026 年 8 月</p>
+      <h1>2.7　上下文压缩策略</h1>
+      <p class="note-lead">
+        前面几节讨论了如何往上下文里放内容——<strong>提示工程决定写什么，Skills 决定按需加载什么，Agent 状态栏决定注入什么元信息</strong>。但随着多轮交互的深入，上下文会不断膨胀。本节讨论的是相反的方向：<strong>如何从上下文中减少内容</strong>——什么时候压缩、怎么压缩、为什么即使上下文没满也应该压缩。
+      </p>
+
+      <!-- ============ 1. 为什么压缩 ============ -->
+      <section class="note-section" id="motivation">
+        <h2>1&nbsp;&nbsp;为什么需要压缩：不只是长度问题（2.7.1）</h2>
+        <p>压缩上下文有两个截然不同的动机，理解这一点对设计压缩策略至关重要。</p>
+        <div class="component-grid" aria-label="两个动机">
+          <article class="component-card core">
+            <span class="index">动机一 · 长度与成本</span>
+            <h3>解决长度约束和成本约束</h3>
+            <p>这是最直观的原因：上下文窗口有限（比如 128K token），工具调用结果动辄数万字符，几轮交互就可能撑满窗口，任务被迫中断。同时 token 越多，API 成本越高，推理延迟也会急剧上升。</p>
+          </article>
+          <article class="component-card">
+            <span class="index">动机二 · 思考质量</span>
+            <h3>总结后的知识比原始形式更利于模型使用</h3>
+            <p>这个动机更深层，也更容易被忽视。即使上下文窗口足够大，把所有原始信息堆在上下文里也不是最优选择。</p>
+          </article>
+        </div>
+        <p>
+          考虑一个具体的例子：Agent 在执行一个复杂任务的过程中，通过 10 次网页搜索积累了关于某个主题的信息。这些搜索结果以原始形式散落在上下文的各个位置——第 2 轮的搜索结果在上下文靠前的地方，第 9 轮的结果在靠后的地方。当 Agent 需要基于所有这些信息做最终决策时，它必须在数万 token 中反复“检索”相关片段，注意力被分散，关键信息容易被遗漏。
+        </p>
+        <div class="callout success" aria-label="总结的价值">
+          <span class="callout-title">📝 而如果在第 10 次搜索之后…</span>
+          <p>先用一次 LLM 调用将已有信息做一次结构化总结——“目前已知：A 是…, B 是…, 还缺 C 的信息”——<strong>模型在后续思考时就可以直接使用这个精炼的知识表示，无需从原始数据中重新提取</strong>。</p>
+        </div>
+      </section>
+
+      <!-- ============ 2. 检索而非推理 ============ -->
+      <section class="note-section" id="retrieval">
+        <h2>2&nbsp;&nbsp;上下文学习的内部机制：检索而非推理（2.7.2）</h2>
+        <p>
+          如前所述，注意力机制擅长在已有内容里“查找”，却不擅长在一次前向传播里主动“归纳统计”。它对压缩的含义是：<strong>状态栏的做法是把算好的结论加进上下文，而压缩是把臃肿的原始记录换成算好的结论——两者是同一枚硬币的两面</strong>，都在给那台“只有一半”的检索引擎补上缺失的“提炼”。区别只在于：状态栏往往由代码每一步确定性地维护，压缩则更多是用一次 LLM 调用把大段原文蒸馏掉。
+        </p>
+        <p>
+          下面用一个简单的例子来直观感受“检索而非推理”这一点。假设上下文中包含一段宠物店的巡查记录：
+        </p>
+        <details class="code-example">
+          <summary>
+            <span class="code-summary-main">
+              <span class="code-lang">text</span>
+              <strong class="code-file">pet_shop.txt</strong>
+              <span class="code-caption">宠物店巡查记录 · 展开查看</span>
+            </span>
+            <span class="code-actions">
+              <button type="button" class="copy-btn" data-copy-target="pet-shop-source">复制代码</button>
+              <span class="code-chevron">⌄</span>
+            </span>
+          </summary>
+          <div class="code-panel">
+            <pre><code id="pet-shop-source" class="language-text">
+笼子 1：黑猫。笼子 2：白猫。笼子 3：黑猫。笼子 4：黑猫。
+笼子 5：白猫。……（共 100 个笼子，其中 90 只黑猫、10 只白猫）
+</code></pre>
+          </div>
+        </details>
+        <p>
+          当你问模型“黑猫和白猫各有多少只？”时，会发生什么？
+        </p>
+        <ul class="checklist" aria-label="三种情形">
+          <li><strong>不启用思维链（Thinking）</strong>：模型很难直接给出正确答案——因为注意力机制擅长的是查找（“笼子 37 里是什么猫？”），而不是统计归纳（“总共有多少只黑猫？”）。后者需要遍历所有记录并维护计数状态，这本质上是思考而非检索。</li>
+          <li><strong>启用思维链</strong>：模型可以通过逐个数数来得到正确答案——但代价是每一次被问到这个问题，都需要重新从头数一遍，产生大量的思考 token。在 Agent 场景中，如果这类统计信息需要被反复使用，累积的思考成本会非常高。</li>
+          <li><strong>提前做一次总结</strong>：在上下文中直接写入“当前统计：黑猫 90 只，白猫 10 只”，模型就能立即检索到这个结论，无需重新思考。<strong>这就是压缩的第二个价值：把需要思考才能得到的结论变成可以直接检索的知识。</strong></li>
+        </ul>
+
+        <h3>上下文腐化（Context Rot）</h3>
+        <div class="definition-box" aria-label="上下文腐化">
+          <span class="definition-label">上下文腐化</span>
+          <p class="definition-sentence">
+            长上下文会导致检索精度的下降。明明上下文窗口还远没有满，但 Agent 突然找不到关键信息了，或者反复纠结于一个早已解决的问题。
+          </p>
+        </div>
+        <div class="callout warning" aria-label="腐化 vs 溢出">
+          <span class="callout-title">⚖️ 上下文腐化与上下文溢出是不同的问题</span>
+          <p>溢出是“装不下了”，腐化是“装得下但找不到了”——<strong>后者更隐蔽</strong>，因为 Agent 表面上还在正常工作，只是决策质量悄然下降。随着上下文长度的增加，注意力权重被分散到更多的 token 上，每个 token 获得的权重变小；更关键的是，无关的内容一旦占到了上下文的大头，Agent 的决策质量就会明显下滑。偶尔才用到的知识每次都加载、稳定的规则和动态的状态混在一起，模型能看到的内容越来越多，但真正有用的部分越来越难被注意到。这就好比在一个巨大的图书馆里找某本书，书架上摆的无关书籍越多，找到目标就越难。</p>
+        </div>
+        <div class="callout success" aria-label="设计原则">
+          <span class="callout-title">🎯 这揭示了上下文压缩的设计原则</span>
+          <p>与其期望模型从冗长的上下文中自动学习，不如<strong>主动地、显式地进行知识提炼</strong>。虽然需要额外的计算投入（用专门的 LLM 调用来做总结），但产生的是经过压缩的高密度知识表示——<strong>不要让模型被动地在海量信息中检索，而要主动为模型提供经过提炼的结构化知识</strong>。</p>
+        </div>
+        <p>
+          从这个视角来看，<strong>上下文学习更像是一种快速适配机制，而非真正的学习</strong>。它允许模型在推理时快速调整行为以适应特定的任务，但这种调整是暂时的、浅层的，会话结束后就消失了。最近的理论研究支持这一判断：当模型看到上下文中的示例时，它的行为就像被“临时定制”过一样——不是真的改变了模型参数，但效果类似于做了一次小小的专项训练。这解释了为什么提示工程一节的 few-shot 示例能显著改善输出质量，也解释了为什么这种改善不会跨会话累积——与真正的参数训练有本质区别。
+        </p>
+      </section>
+
+      <!-- ============ 3. 压缩与 KV Cache ============ -->
+      <section class="note-section" id="complement">
+        <h2>3&nbsp;&nbsp;压缩与 KV Cache：看似矛盾，实则互补（2.7.3）</h2>
+        <p>
+          在讨论具体的压缩策略之前，需要解释一个看似矛盾的问题：前面反复强调 KV Cache 要求上下文前缀保持不变，但压缩不就是要修改上下文中间的内容吗？
+        </p>
+        <div class="callout warning" aria-label="关键：时机和位置">
+          <span class="callout-title">🔑 关键在于理解压缩发生的时机和位置</span>
+          <p>压缩不是<strong>在单次 API 调用的过程中</strong>修改上下文，而是<strong>在两次 API 调用之间</strong>，由 Agent 框架对消息列表进行预处理：</p>
+          <ol class="steps">
+            <li><strong>System Prompt 和 Tool Definitions 永远不动</strong>——这是上下文最前面的“静态前缀”，KV Cache 持续缓存</li>
+            <li><strong>压缩的对象是对话历史中的 tool results</strong>——当 Agent 框架用压缩后的摘要替换原始的工具输出时，替换位置之后的缓存会失效，但之前的缓存仍然有效</li>
+            <li><strong>这是一个有意识的权衡</strong>：不压缩，上下文膨胀到超出窗口限制，任务直接失败；压缩后，虽然损失了部分缓存，但上下文长度可控且信息密度更高。因此压缩的频次需要权衡——<strong>频繁压缩会频繁破坏缓存，最好在上下文接近阈值时批量压缩，而不是每轮都压</strong></li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ============ 4. 六种策略 ============ -->
+      <section class="note-section" id="six-strategies">
+        <h2>4&nbsp;&nbsp;实验 2-9 ★★★：上下文压缩策略对比</h2>
+        <p>
+          实验设计了一个研究任务：<strong>识别并追踪 OpenAI 联合创始人的职业状态</strong>。这个任务需要多步骤的信息聚合，搜索返回的内容长度差异很大（从数千到十几万个字符不等），且有明确的成功标准。使用 Kimi K3（思考模型，原生上下文约 100 万 token；本实验刻意将上下文预算限制在 128K 窗口以触发压缩），实现了六种策略：
+        </p>
+        <div class="table-wrap">
+          <table class="note-table">
+            <thead>
+              <tr>
+                <th>策略</th>
+                <th>机制</th>
+                <th>Token 用量</th>
+                <th>压缩率</th>
+                <th>迭代次数</th>
+                <th>结果</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>① 无压缩</td>
+                <td>所有工具调用的原始结果完整保留（7 次调用，平均每次约 52,000 字符）</td>
+                <td>166,043</td>
+                <td>102.1%</td>
+                <td>5</td>
+                <td>✗ 失败</td>
+              </tr>
+              <tr>
+                <td>② 个体摘要</td>
+                <td>每个搜索结果独立生成 2-3 段摘要</td>
+                <td>276,608</td>
+                <td>10.9%</td>
+                <td>12</td>
+                <td>✓ 成功</td>
+              </tr>
+              <tr>
+                <td>③ 组合摘要</td>
+                <td>所有结果合并后生成一份综合摘要</td>
+                <td>93,449</td>
+                <td>4.3%</td>
+                <td>10</td>
+                <td>✓ 成功</td>
+              </tr>
+              <tr>
+                <td>④ 上下文感知</td>
+                <td>将查询意图和已有信息纳入压缩决策</td>
+                <td>40,157</td>
+                <td>3.0%</td>
+                <td>7</td>
+                <td>✓ 成功</td>
+              </tr>
+              <tr>
+                <td>⑤ 感知 + 引用</td>
+                <td>智能压缩 + 保留 URL 引用标记</td>
+                <td>222,992</td>
+                <td>4.1%</td>
+                <td>10</td>
+                <td>✓ 成功</td>
+              </tr>
+              <tr>
+                <td>⑥ 自适应窗口化</td>
+                <td>&lt; 80% 窗口保留原文，超出后批量压缩</td>
+                <td>174,601</td>
+                <td>102.4%</td>
+                <td>7</td>
+                <td>✓ 成功</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout success" aria-label="结论">
+          <span class="callout-title">📌 上下文感知压缩：相比无压缩节省 76% token，并列最少迭代次数</span>
+          <p><strong>关键：将查询意图和已有信息纳入压缩决策。</strong></p>
+        </div>
+
+        <h3>四种核心策略的详细分析</h3>
+        <div class="component-grid" aria-label="策略分析">
+          <article class="component-card">
+            <span class="index">策略一 · 无压缩</span>
+            <h3>任务失败</h3>
+            <p>多次搜索累计返回约 367,000 个字符。到第五次迭代时，上下文累计已超过 128K 限制（约 165,000 token），触发了溢出保护，任务失败。<strong>仅需数次搜索就能耗尽 128K 的窗口。</strong></p>
+          </article>
+          <article class="component-card">
+            <span class="index">策略二、三 · 非任务感知</span>
+            <h3>能完成但效率低</h3>
+            <p>个体摘要（压缩率 10.9%）的问题是<strong>信息碎片化</strong>——多个页面重复描述同一事件，白白浪费上下文空间。组合摘要（压缩率 4.3%）在输入超长时必须截断，可能丢失末尾信息。<strong>两者的共同缺陷：缺乏语义理解，无法区分信息的相关性。</strong></p>
+          </article>
+          <article class="component-card core">
+            <span class="index">策略四 · 上下文感知压缩</span>
+            <h3>核心创新：意图驱动</h3>
+            <p>将当前查询意图和已积累信息纳入压缩决策。通过在压缩提示中指定 “Given the search query: {query}” 和 “Current context: {context}”，引导模型生成有针对性的摘要。结果仅需 7 次迭代、40,157 个 token，整体压缩率约 3.0%。</p>
+            <p>以其中一次压缩为例：将 147,877 个字符压缩到 1,963 个字符（约 1.3%）时，仍保留了创始人姓名与职位变动等关键信息；后续的搜索能智能地提取职位变动、新公司等关键信息，过滤掉无关的历史背景和重复内容。</p>
+          </article>
+          <article class="component-card">
+            <span class="index">策略五 · 带引用的上下文感知</span>
+            <h3>有损压缩 + 无损索引</h3>
+            <p>在智能压缩基础上增加信息溯源，每条事实附带来源的 URL 引用标记。Token 量增至 222,992，压缩率 4.1%，但提供了信息验证的途径。<strong>内容经过语义压缩（有损），但通过保留源链接（无损索引），理论上可以随时回溯到原始信息。</strong></p>
+          </article>
+        </div>
+
+        <h3>策略六 · 自适应窗口化的三个核心机制</h3>
+        <p>基于一个关键洞察：<strong>任务初期上下文空间充足，无需急于压缩，只有在接近容量限制时才启动压缩机制</strong>，从而最大限度地保留原始信息的完整性。</p>
+        <div class="component-grid three" aria-label="三个核心机制">
+          <article class="component-card">
+            <span class="index">① 阈值触发</span>
+            <h3>超过窗口 80% 才压缩</h3>
+            <p>持续监控上下文使用率，当 prompt token 数超过窗口的 80%（128K 窗口即 102,400 个 token）时才激活压缩。</p>
+          </article>
+          <article class="component-card">
+            <span class="index">② 批量压缩</span>
+            <h3>一次性压缩所有未标记结果</h3>
+            <p>触发时一次性压缩所有未标记的工具结果。例如约第 4 次迭代检测到上下文超过阈值（实测在约 135,600 token 处触发）后，立即压缩全部 10 个未压缩的工具消息。</p>
+          </article>
+          <article class="component-card">
+            <span class="index">③ 防重复保护</span>
+            <h3>[COMPRESSED] 标记</h3>
+            <p>添加 [COMPRESSED] 标记确保已压缩的内容永不被重复处理。</p>
+          </article>
+        </div>
+        <p>虽然总 Token 使用量较大（174,601），但<strong>前几次迭代保持了完整的原始信息，为初期广泛的信息收集提供了最大的灵活性</strong>。</p>
+
+        <div class="callout warning" aria-label="关键洞察">
+          <span class="callout-title">💡 多步骤任务的关键洞察</span>
+          <p><strong>不同阶段需要的信息密度和类型是不同的</strong>——初期需要广泛的信息收集，中期需要精确的事实核验，后期需要综合的信息整合。上下文感知压缩通过动态调整压缩的侧重点，实现了信息价值的最大化。</p>
+        </div>
+      </section>
+
+      <!-- ============ 5. 分层压缩 ============ -->
+      <section class="note-section" id="production">
+        <h2>5&nbsp;&nbsp;生产级的分层压缩机制（2.7.4）</h2>
+        <p>
+          上面的实验展示了不同压缩策略的效果差异。在生产环境中，成熟的 Agent 系统通常不会只采用单一策略，而是将多种策略组合为<strong>分层的压缩机制</strong>——不同类型的信息有不同的保质期，压缩策略应当与信息的预期生命周期匹配。以 Claude Code 的做法为参照，一个成熟的上下文管理系统通常包含五个层次：
+        </p>
+        <div class="lifecycle-flow" aria-label="五层压缩">
+          <div class="phase">
+            <div class="phase-label">第 1 层 · 工具结果预算控制<span>大输出存盘，模型只看摘要</span></div>
+            <div class="phase-content">
+              <p>大体积的工具输出存到磁盘，模型只看摘要预览。<strong>替换决策一旦做出就被冻结</strong>，以保证缓存的一致性。</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-label">第 2 层 · 噪声直接删除<span>不做摘要</span></div>
+            <div class="phase-content">
+              <p>低价值的内容（如大量搜索结果中只被使用了几行的内容）直接移除。<strong>对噪声做摘要只是在浪费 token。</strong></p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-label">第 3 层 · API 层微压缩<span>服务端移除，本地不动</span></div>
+            <div class="phase-content">
+              <p>通过 API 层的上下文编辑能力，指示服务端从前缀中移除指定的工具结果，本地消息保持不变。优势是零本地实现成本、由服务端一次性完成；但移除点之后的缓存同样会失效，产生一次缓存重建。<strong>适合在上下文即将溢出、反正要付出这次重建代价时使用，而不是频繁触发。</strong></p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-label">第 4 层 · 归档式摘要<span>像 git log 而非 git squash</span></div>
+            <div class="phase-content">
+              <p>逐轮做结构化摘要，保留每轮的独立记录（而非合并成一条），<strong>保留对话的逻辑脉络</strong>。</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-label">第 5 层 · 全量压缩<span>LLM 驱动，最后手段</span></div>
+            <div class="phase-content">
+              <p>由 LLM 驱动的完整压缩，作为最后手段。即便如此也是分两个阶段的：先尝试压缩会话记忆，不行再做全量压缩。全量压缩还配备了<strong>连续失败的熔断器</strong>（连续失败达到一定次数后自动停止重试）——生产数据表明，大量会话会被困在反复压缩失败的循环中，熔断器避免了在这些会话上持续烧钱。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 6. 设计原则 ============ -->
+      <section class="note-section" id="principles">
+        <h2>6&nbsp;&nbsp;压缩策略的设计原则（2.7.5）</h2>
+        <p>
+          前面已经分析了压缩的两个动机（控制长度与提升思考质量）和“上下文学习本质上是检索”的内部机制。在此基础上，可以提炼出指导具体压缩策略设计的四条原则。这里的压缩服务于当前任务；当多次任务的轨迹需要被离线整理为持久经验时，则进入第八章讨论的持续进化问题。
+        </p>
+        <div class="component-grid" aria-label="四条设计原则">
+          <article class="component-card core">
+            <span class="index">① 信息价值的非均匀分布</span>
+            <h3>分清关键、支撑与噪声</h3>
+            <p>关键的决策点（如人员名单）的价值高于支撑性的证据（如新闻细节），更高于冗余的噪声（如网页导航栏、页脚广告等元素）。</p>
+          </article>
+          <article class="component-card">
+            <span class="index">② 语义完整性</span>
+            <h3>不可丢失关键信息</h3>
+            <p>“Sutskever 于 2024 年 5 月离开 OpenAI”不能压缩成“Sutskever 离开”——时间和公司名是不可丢失的关键信息。</p>
+          </article>
+          <article class="component-card">
+            <span class="index">③ 任务相关性</span>
+            <h3>压缩结果随任务而变</h3>
+            <p>同样的内容在“查找创始人名单”和“了解个人背景”两个不同的任务下，应该产生不同的压缩结果。</p>
+          </article>
+          <article class="component-card">
+            <span class="index">④ 压缩即理解</span>
+            <h3>深层语义理解 + 可审查可复用</h3>
+            <p>有效的压缩需要深层的语义理解能力——用更精炼的表达来捕捉上下文的精髓。而且<strong>显式压缩的结果是可审查的、可跨会话复用的</strong>。</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ============ 7. 架构启示 ============ -->
+      <section class="note-section" id="implications">
+        <h2>7&nbsp;&nbsp;对 Agent 架构设计的启示（2.7.6）</h2>
+        <p>
+          上下文压缩策略的研究触及了 Agent 系统设计的本质问题。压缩即理解——<strong>负责压缩的模块本身需要接近主模型的语言理解能力，形成“模型调用模型”的递归架构</strong>。压缩策略与任务类型耦合——信息检索类的任务需要保留广度，分析类的任务需要保留深度，创作类的任务需要保留灵感触发点，<strong>未来的 Agent 应当具备根据任务类型自适应选择压缩策略的能力</strong>。
+        </p>
+        <p>
+          虽然压缩需要额外的计算开销（每次压缩就是一次额外的 LLM 调用），但相比节省的 token 成本和提升的任务成功率，投资回报率是极高的。<strong>实验显示上下文感知压缩将 token 使用量减少了 75% 以上。</strong>
+        </p>
+        <h3>压缩最容易丢失的：显式定义保留优先级</h3>
+        <p>
+          压缩最容易丢失的不是细节本身，而是<strong>早期的架构决策、约束背后的理由和失败的路径</strong>——LLM 通常会优先删除那些看起来还可以重新获取的信息。在生产级的 Agent 系统中，建议显式定义压缩时的保留优先级：
+        </p>
+        <ol class="steps">
+          <li><strong>架构决策和关键约束</strong>：不得摘要</li>
+          <li><strong>已修改的文件列表和关键的变更记录</strong>：完整保留</li>
+          <li><strong>验证状态（pass/fail）</strong>：必须保留</li>
+          <li><strong>未解决的 TODO 和回滚笔记</strong>：必须保留</li>
+          <li><strong>工具输出</strong>：可以删除，仅保留 pass/fail 结论</li>
+        </ol>
+      </section>
+
+      <!-- ============ 8. 隔离优于压缩 ============ -->
+      <section class="note-section" id="isolation">
+        <h2>8&nbsp;&nbsp;隔离优于压缩：子 Agent 上下文隔离（2.7.7）</h2>
+        <p>
+          压缩是在信息已经进入上下文之后做减法，而一个更釜底抽薪的思路是：<strong>让大体积的中间信息根本不进入主上下文</strong>。这就是子 Agent 上下文隔离——主 Agent 把“在代码库中大范围搜索”这类会产生海量中间内容的任务，委派给一个独立的子 Agent；<strong>子 Agent 在自己的上下文中完成探索，只把几百 token 的结论性摘要回传给主 Agent</strong>。
+        </p>
+        <div class="boundary-grid" aria-label="隔离 vs 亲自搜索">
+          <article class="boundary-card">
+            <span class="question">主 Agent 亲自搜索</span>
+            <h3>数万 token 噪声进入主上下文</h3>
+            <p>以“在代码库中找到处理支付回调的函数”为例：主 Agent 亲自搜索，可能要阅读十几个文件、数万 token 的原始代码进入主上下文，其中绝大部分在找到目标后就沦为永久占据窗口的噪声，还得靠后续压缩来清理。</p>
+          </article>
+          <article class="boundary-card primary">
+            <span class="question">委派给搜索子 Agent</span>
+            <h3>主上下文只增加两条消息</h3>
+            <p>一条任务描述，一条结论（“函数位于 src/payment/callbacks.py 的 handle_callback，另有两处调用点”），中间过程的数万 token 随子 Agent 的上下文一起被丢弃。</p>
+          </article>
+        </div>
+        <div class="callout success" aria-label="隔离的本质">
+          <span class="callout-title">⚖️ 用隔离代替压缩</span>
+          <ul>
+            <li><strong>压缩是有损的、需要额外 LLM 调用的事后补救</strong>；隔离则让噪声从一开始就与主上下文绝缘，主 Agent 的 KV Cache 前缀也完全不受影响</li>
+            <li>代价是子 Agent 看不到主 Agent 的完整上下文，<strong>任务描述必须自包含、目标明确</strong>——这又回到了本章的主题：上下文的质量决定能力上限，对子 Agent 同样成立</li>
+            <li>Claude Code 的 Task 工具、各类深度研究（Deep Research）系统的检索子 Agent，都是这一模式的生产实现</li>
+          </ul>
+        </div>
+        <p>子 Agent 作为一种协作工具的完整设计将在第四章展开，多 Agent 系统的上下文架构则是第十章的主题。</p>
+      </section>
+
+      <!-- ============ 9. 本章小结 ============ -->
+      <section class="note-section" id="summary">
+        <h2>9&nbsp;&nbsp;本章小结（2.8）</h2>
+        <p>
+          本章绕来绕去，其实在说一件事：<strong>给模型看什么、怎么组织，比模型本身有多聪明往往更影响最终的结果</strong>。API 的消息结构定义了上下文的骨架；KV Cache 约束了你能改什么、不能改什么；提示工程和 Agent Skills 决定了如何高效地向模型提供静态指令和动态知识；Agent 状态栏把隐式的状态变成可直接使用的显式信息；压缩策略则解决了上下文不断膨胀的问题——不仅是控制长度，更是通过主动总结把原始数据变成高密度的结构化知识。
+        </p>
+        <div class="callout success" aria-label="共同点">
+          <span class="callout-title">🔗 这些技术的共同点</span>
+          <p>显式的、工程化的信息管理：<strong>不要让模型被动地在海量上下文中寻找线索，而要主动提供经过提炼的结构化状态</strong>。从 KV Cache 友好的上下文布局到上下文感知压缩，本章展示的每一项技术都是在当前模型能力边界下，用工程手段最大化信息利用效率。</p>
+        </div>
+        <p>
+          本章处理的是一次任务之内的状态更新与上下文腐化。<strong>下一章</strong>将从上下文窗口内的信息管理，延伸到跨越任务的持久化知识体系——用户记忆和知识库，使 Agent 能够在实践中不断积累经验，逐步成为更了解用户的助手，或者具备更多领域知识的领域专家。
+        </p>
+      </section>
+
+      <!-- ============ 10. 思考题 ============ -->
+      <section class="note-section" id="thinking">
+        <h2>10&nbsp;&nbsp;深度思考 · 思考题</h2>
+        <ol class="steps">
+          <li>★★★ 实验 2-3 发现，滑动窗口对话历史会导致 Agent 反复执行相同的工具调用。但完整保留历史又会让上下文不断膨胀。设计一种策略，既能避免信息丢失，又能控制上下文长度，且不破坏 KV Cache 前缀。</li>
+          <li>★★ Qwen3 的 Chat Template 思维链保留机制只保留“最后一个真实用户消息之后”的思考。如果一个 ReAct 循环跨越了上百轮工具调用，累积的思考内容可能消耗大量上下文。你会如何修改这个机制来应对超长循环？DeepSeek R1 曾要求剥离全部历史思考，而 DeepSeek V4 反转为强制回传全部 reasoning_content——对比这两种相反的策略，各有什么利弊？这个反转说明了什么？</li>
+          <li>★★ 上下文感知压缩实验中，从约 148K 个字符压缩到约 2,000 个字符，这种极端的压缩是否存在“不可逆信息损失”的风险？如何解决？</li>
+          <li>★★ Agent 状态栏将隐式状态显式化。但如果状态栏本身包含了错误信息（比如工具计数器出了 bug），Agent 可能基于错误的信息做出有害的决策。这种“元信息可靠性”问题如何缓解？</li>
+          <li>★★ 提示工程消融实验表明，信息组织的混乱导致成功率下降 30% 以上。但在实际开发中，系统提示词往往由多人在不同时间维护。你会用什么工程实践来防止系统提示词的“熵增”？</li>
+          <li>★★★ 本章提出“上下文学习本质上是检索而非推理”。如果这个论断成立，当前所有基于“把更多信息塞进上下文”的优化方向都需要重新审视。你认为应该如何突破这一局限？</li>
+          <li>★★★ Skills 的渐进式披露只在 Agent 判断需要时才加载完整内容。但这个判断本身依赖模型的能力——如果模型不知道自己不知道什么，就无法正确触发 Skill 的加载。这个“元认知”问题如何解决？</li>
+          <li>★★ Skills 机制中，Agent 从 SKILL 文件中动态读取提示词之后，后续的操作能否正确遵从这些指令？不同的模型对 Skills 模式的支持有什么区别？</li>
+          <li>★★★ 本章强调动态信息（如系统时间戳、工具列表顺序）的变化会破坏 KV Cache 前缀命中。在一个拥有大量工具且工具集频繁变动的生产系统中，你会如何设计上下文布局来最大化缓存命中率？</li>
+        </ol>
+      </section>
+
+      <!-- ============ 参考资料 ============ -->
+      <section class="note-section" id="references">
+        <h2>参考资料</h2>
+        <div class="sources-list">
+          <ul>
+            <li>Benoit Dherin et al., “Learning without training”, 2025.</li>
+            <li>李博杰，《深入理解 AI Agent：设计原理与工程实践》——第 2 章 2.7–2.8 节</li>
+          </ul>
+        </div>
+        <p class="source-note">
+          说明：本页为对原书 2.7 节及 2.8 小结内容的结构化重组与学习笔记式归纳，实验数据表格为笔记式整理，并非原文逐段转载。
+        </p>
+      </section>
+
+      <a href="#top" class="back-to-top">↑ 返回顶部</a>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      function copyText(btn, target) {
+        var text = target.innerText;
+        function done(ok) {
+          btn.classList.add(ok ? 'copied' : 'copy-failed');
+          btn.textContent = ok ? '已复制 ✓' : '复制失败';
+          setTimeout(function () {
+            btn.classList.remove('copied', 'copy-failed');
+            btn.textContent = '复制代码';
+          }, 1600);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+        } else {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          try { document.execCommand('copy'); done(true); }
+          catch (e) { done(false); }
+          document.body.removeChild(ta);
+        }
+      }
+      document.querySelectorAll('.copy-btn[data-copy-target]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var target = document.getElementById(btn.getAttribute('data-copy-target'));
+          if (target) copyText(btn, target);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

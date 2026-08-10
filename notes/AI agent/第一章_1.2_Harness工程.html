@@ -1,708 +1,752 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>第一章 · 1.2 Harness 工程——模型之外的竞争力</title>
-  <link rel="stylesheet" href="style.css">
-  <link rel="icon" href="../../image/favicon.jpg" type="image/x-icon">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第一章 · 1.2 Harness 工程——模型之外的竞争力</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="../../image/favicon.jpg" type="image/x-icon">
 </head>
 <body class="notes-page agent-system-page" id="top">
-  <div class="notes-layout">
+<div class="notes-layout">
     <aside class="notes-sidebar">
-      <h1 class="notes-brand">第一章 现代 Agent 基础</h1>
-      <p class="notes-subtitle">《深入理解 AI Agent：设计原理与工程实践》读书笔记 · 1.2</p>
-      <div class="notes-home-links">
-        <a href="../../notes-index.html">← Notes index</a>
-        <a href="../../index.html">Home</a>
-      </div>
-      <nav class="notes-nav" aria-label="Harness 工程知识点">
-        <h2 class="notes-nav-title">Knowledge Points</h2>
-        <ul>
-          <li><a href="#what-is-harness">1 最小公式与边界</a></li>
-          <li><a href="#paradigm">2 工程范式演进（1.2.1）</a></li>
-          <li><a href="#five-functions">3 Harness 五功能（1.2.2）</a></li>
-          <li><a href="#principles">4 三核心原则（1.2.3）</a></li>
-          <li><a href="#model-choice">5 模型选择（1.2.4）</a></li>
-          <li><a href="#orchestration">6 编排模式（1.2.5）</a></li>
-          <li><a href="#guardrails">7 护栏与安全性（1.2.6）</a></li>
-          <li><a href="#book-map">8 本书结构映射（1.2.7）</a></li>
-          <li><a href="#references">参考资料</a></li>
-        </ul>
-      </nav>
+        <h1 class="notes-brand">Harness 工程：模型之外的竞争力</h1>
+        <p></p>
+        <div class="notes-home-links">
+            <a href="../../notes-index.html">← Notes index</a>
+            <a href="../../index.html">Home</a>
+        </div>
+        <nav class="notes-nav" aria-label="Harness 工程知识点">
+            <h2 class="notes-nav-title">Knowledge Points</h2>
+            <ul>
+                <li><a href="#what-is-harness">1 最小公式与边界</a></li>
+                <li><a href="#paradigm">2 工程范式演进</a></li>
+                <li><a href="#five-functions">3 Harness 五功能</a></li>
+                <li><a href="#principles">4 三核心原则</a></li>
+                <li><a href="#model-choice">5 模型选择</a></li>
+                <li><a href="#orchestration">6 编排模式</a></li>
+                <li><a href="#guardrails">7 护栏与安全性</a></li>
+                <li><a href="#book-map">8 本书结构映射</a></li>
+                <li><a href="#references">参考资料</a></li>
+            </ul>
+        </nav>
     </aside>
 
     <main class="notes-content note-body">
-      <p class="note-meta">更新于 2026 年 8 月</p>
-      <h1>1.2　Harness 工程——模型之外的竞争力</h1>
-      <p class="note-lead">
-        1.1 建立了 Agent 的最小工程公式：<strong>Agent = LLM + 上下文 + 工具</strong>——它回答了“Agent 是什么”。本节回答下半部分：<strong>Agent 如何在生产环境中可靠运行</strong>。把 LLM 抽象为核心组件 Model，把 Agent 边界内、模型之外的运行与治理层统称为 <strong>Harness</strong>——上下文管理 + 工具接口 + 约束 + 验证 + 纠正。模型提供理解与推理能力，Harness 把这些能力引导、约束和放大为可靠的任务执行。
-      </p>
-
-      <!-- ============ 1. 最小公式与边界 ============ -->
-      <section class="note-section" id="what-is-harness">
-        <h2>1&nbsp;&nbsp;最小公式与边界</h2>
-
-        <div class="definition-box" aria-label="工作定义">
-          <span class="definition-label">工作定义</span>
-          <p class="definition-sentence">
-            Harness 是 Agent 边界内、模型之外的运行与治理层——负责中介 Model 与 Environment 的交互，但不包含被交互的环境本身。
-          </p>
-        </div>
-
-        <div class="formula-box" aria-label="生产形态公式">
-          <p class="formula">Agent = Model + Harness　·　Harness = 上下文管理 + 工具接口 + 约束 + 验证 + 纠正</p>
-          <p class="formula-note">
-            最小公式＝Demo 视角（Model + 能构造上下文、暴露工具接口的最小 Harness）；扩展公式＝生产视角（再补上约束、验证、纠正三层工程外壳）。后者完全包含前者，并在外围加了一圈安全网。
-          </p>
-        </div>
-
-        <p>
-          之所以换用更通用的“Model”一词，是因为 Harness 工程的原则适用于任何具备推理和工具调用能力的模型，不限于某种特定模型类型。回到马具隐喻：<strong>没有 Harness 的模型就像脱缰的野马</strong>——能力惊人，却无法可靠地完成任务。
+        <p class="note-meta">更新于 2026 年 8 月</p>
+        <p class="note-lead">
+            1.1 建立了 Agent 的最小工程公式：<strong>Agent = LLM + 上下文 + 工具</strong>——它回答了“Agent 是什么”。本节回答下半部分：<strong>Agent
+            如何在生产环境中可靠运行</strong>。
+            把 LLM 抽象为核心组件 Model，把 Agent 边界内、模型之外的运行与治理层统称为 <strong>Harness</strong>（上下文管理
+            + 工具接口 + 约束 + 验证 + 纠正）。模型提供理解与推理能力，
+            Harness 把这些能力引导、约束和放大为可靠的任务执行。
         </p>
 
-        <h3>边界归属：Harness 不是模型之外的一切</h3>
-        <div class="boundary-grid" aria-label="Harness 与 Environment 的边界">
-          <article class="boundary-card primary">
-            <span class="question">属于 Harness</span>
-            <h3>Agent 边界内、模型之外</h3>
-            <p>支撑模型运行、中介模型与环境交互的代码、配置与服务。</p>
-            <ul>
-              <li><strong>工具定义</strong>、调用适配器、权限检查</li>
-              <li><strong>沙箱的权限与重置机制</strong></li>
-              <li>上下文管理、约束、验证与纠正的实现</li>
-            </ul>
-          </article>
-          <article class="boundary-card">
-            <span class="question">属于 Environment</span>
-            <h3>被交互的世界本身</h3>
-            <p>工具背后的对象仍属于环境，物理部署位置不决定概念归属。</p>
-            <ul>
-              <li>沙箱内随行动变化的<strong>文件与进程</strong></li>
-              <li>外部<strong>数据库、网页、用户</strong>及物理世界</li>
-              <li>注意：即使仿真环境与 Agent 运行在同一进程中，它仍然是 Environment</li>
-            </ul>
-          </article>
-        </div>
+        <!-- ============ 1. 最小公式与边界 ============ -->
+        <section class="note-section" id="what-is-harness">
+            <h2>1&nbsp;&nbsp;最小公式与边界</h2>
 
-        <h3>例子：退掉 3 天前的订单——同一个模型，有无 Harness 天壤之别</h3>
-        <div class="table-wrap">
-          <table class="note-table">
-            <thead>
-              <tr>
-                <th>环节</th>
-                <th>没有 Harness</th>
-                <th>有了 Harness</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>上下文</td>
-                <td>看不到退款政策</td>
-                <td>系统提示词写明 7 天退款政策</td>
-              </tr>
-              <tr>
-                <td>工具</td>
-                <td>不知道该调哪个 API</td>
-                <td>调用 <code>query_order</code> 与 <code>process_refund</code> 完成操作</td>
-              </tr>
-              <tr>
-                <td>约束</td>
-                <td>—</td>
-                <td>校验退款金额不超过订单金额</td>
-              </tr>
-              <tr>
-                <td>验证</td>
-                <td>直接编造一个退款结果回复用户</td>
-                <td>校验数据库状态，确认退款成功</td>
-              </tr>
-              <tr>
-                <td>纠正</td>
-                <td>用户发现退款根本没发生</td>
-                <td>API 调用超时则自动重试</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <h3>Harness 五功能概览</h3>
-        <div class="table-wrap">
-          <table class="note-table">
-            <thead>
-              <tr>
-                <th>功能</th>
-                <th>一句话职责</th>
-                <th>与上下文 / 工具的关系</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Context（上下文）</td>
-                <td>为模型提供感知信息</td>
-                <td>核心能力</td>
-              </tr>
-              <tr>
-                <td>Tools（工具接口）</td>
-                <td>为模型提供观察与行动手段</td>
-                <td>核心能力</td>
-              </tr>
-              <tr>
-                <td>Constrain（约束）</td>
-                <td>设定行为边界——能做什么、不能做什么</td>
-                <td>围绕上下文和工具构建的安全边界</td>
-              </tr>
-              <tr>
-                <td>Verify（验证）</td>
-                <td>自动判断操作结果的对错</td>
-                <td>围绕工具执行结果构建的检查机制</td>
-              </tr>
-              <tr>
-                <td>Correct（纠正）</td>
-                <td>发现问题时自动修正或回退</td>
-                <td>围绕工具调用失败构建的恢复机制</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="callout warning" aria-label="能做事 vs 不做错事">
-          <span class="callout-title">⚖️ 能做事 与 不做错事：重要性不对称</span>
-          <p>上下文与工具让 Agent <strong>“能做事”</strong>——理解任务并采取行动；约束、验证与纠正让 Agent <strong>“不做错事”</strong>——确保上下文和工具在生产环境中可靠运转。早期框架重在上下文与工具；生产级系统的重心已经转向约束、验证与纠正。</p>
-        </div>
-
-        <h3>以 Claude Code 为例：Harness 的主体是保障机制</h3>
-        <p>
-          工具本身（文件读写、命令执行、搜索）只是 Harness 的一小部分，围绕工具构建的保障机制才是核心：
-        </p>
-        <ul class="checklist" aria-label="Claude Code 的 Harness 保障机制">
-          <li><strong>流程状态管理</strong>：追踪 Agent 当前执行到哪一步</li>
-          <li><strong>多层上下文压缩</strong>：信息太多时自动精简</li>
-          <li><strong>权限分类</strong>：控制哪些操作需要用户确认</li>
-          <li><strong>熔断器</strong>（Circuit Breaker）：错误连续发生时自动“断电”停止重试——就像保险丝自动跳闸，防止整个系统崩溃</li>
-          <li><strong>错误恢复机制</strong>：捕获异常、回滚到上一稳定状态、重试或交还给人类</li>
-        </ul>
-        <p>
-          行业正在从“能做事”向“可靠地做事”转变，Harness 工程因此成为 Agent 系统的核心竞争力。
-        </p>
-
-        <figure class="figure-center">
-          <img src="images/02-Harness工程构成.svg" alt="1.2 Harness 工程知识逻辑架构图" width="800">
-          <figcaption>1.2 Harness 工程——模型之外的竞争力：知识逻辑全景图</figcaption>
-        </figure>
-      </section>
-
-      <!-- ============ 2. 范式演进 ============ -->
-      <section class="note-section" id="paradigm">
-        <h2>2&nbsp;&nbsp;工程范式演进：从提示工程到 Loop 工程（1.2.1）</h2>
-
-        <p>回顾 AI 应用工程的发展，可以看到一条清晰的演进弧线：</p>
-
-        <div class="lifecycle-flow" aria-label="工程范式演进">
-          <div class="phase">
-            <div class="phase-label">提示工程<span>Prompt Engineering</span></div>
-            <div class="phase-content">
-              <p><strong>第一波</strong>——通过优化输入给模型的自然语言指令，提升输出质量。</p>
+            <div class="definition-box" aria-label="工作定义">
+                <span class="definition-label">工作定义</span>
+                <p class="definition-sentence">
+                    Harness 是 Agent 边界内、模型之外的运行与治理层，它负责中介 Model 与 Environment 的交互，但不包含被交互的环境本身。
+                </p>
             </div>
-          </div>
-          <div class="phase">
-            <div class="phase-label">上下文工程<span>Context Engineering</span></div>
-            <div class="phase-content">
-              <p><strong>第二波</strong>——单纯优化提示词还不够，需要系统性地管理模型能看到的所有信息：系统指令、工具定义、对话历史、外部知识。</p>
+
+            <div class="formula-box" aria-label="生产形态公式">
+                <p class="formula">Agent = Model + Harness </p>
+                <p class="formula">Harness = 上下文管理 + 工具接口 + 约束 + 验证 + 纠正 </p>
+                <p class="formula-note">
+                    最小公式＝Demo 视角（Model + 能构造上下文、暴露工具接口的最小
+                    Harness）；</p>
+                <p class="formula-note">
+                    扩展公式＝生产视角（再补上约束、验证、纠正三层工程外壳）。后者完全包含前者，并在外围加了一圈安全网。
+                </p>
             </div>
-          </div>
-          <div class="phase">
-            <div class="phase-label">Harness 工程<span>Harness Engineering</span></div>
-            <div class="phase-content">
-              <p><strong>第三波</strong>——视野从“模型能看到什么”扩展到“Agent 如何组织模型运行并与环境交互”：上下文与工具接口、约束机制、验证手段、反馈循环和错误恢复。</p>
+
+            <p>
+                之所以换用更通用的“Model”一词，是因为 Harness 工程的原则适用于任何具备推理和工具调用能力的模型，不限于某种特定模型类型。回到马具隐喻：<strong>没有
+                Harness 的模型就像脱缰的野马</strong>——能力惊人，却无法可靠地完成任务。
+            </p>
+
+            <h3>边界归属：Harness 不是模型之外的一切</h3>
+            <div class="boundary-grid" aria-label="Harness 与 Environment 的边界">
+                <article class="boundary-card primary">
+                    <span class="question">属于 Harness</span>
+                    <h3>Agent 边界内、模型之外</h3>
+                    <p>负责中介 Model
+                        与 Environment 的交互，但不包含被交互的环境本身。</p>
+                    <ul>
+                        <li><strong>工具定义</strong>、调用适配器、权限检查</li>
+                        <li><strong>沙箱的权限与重置机制</strong></li>
+                        <li>上下文管理、约束、验证与纠正的实现</li>
+                    </ul>
+                </article>
+                <article class="boundary-card">
+                    <span class="question">属于 Environment</span>
+                    <h3>被交互的世界本身</h3>
+                    <p>工具背后的对象仍属于环境，物理部署位置不决定概念归属。</p>
+                    <ul>
+                        <li>沙箱内随行动变化的<strong>文件与进程</strong></li>
+                        <li>外部<strong>数据库、网页、用户</strong>及物理世界</li>
+                        <li>注意：即使仿真环境与 Agent 运行在同一进程中，它仍然是 Environment</li>
+                    </ul>
+                </article>
             </div>
-          </div>
-          <div class="phase">
-            <div class="phase-label">Loop 工程<span>Loop Engineering</span></div>
-            <div class="phase-content">
-              <p><strong>随后</strong>——从单次运行扩展到跨轮次的持续自主运转：谁来发现下一件该做的事、何时验证、何时才算真正完成（第十章结合多 Agent 协作系统展开）。</p>
+
+            <h3>例子：退掉 3 天前的订单——同一个模型，有无 Harness 天壤之别</h3>
+            <div class="table-wrap">
+                <table class="note-table">
+                    <thead>
+                    <tr>
+                        <th>环节</th>
+                        <th>没有 Harness</th>
+                        <th>有了 Harness</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td>上下文</td>
+                        <td>看不到退款政策</td>
+                        <td>系统提示词写明 7 天退款政策</td>
+                    </tr>
+                    <tr>
+                        <td>工具</td>
+                        <td>不知道该调哪个 API</td>
+                        <td>调用 <code>query_order</code> 与 <code>process_refund</code> 完成操作</td>
+                    </tr>
+                    <tr>
+                        <td>约束</td>
+                        <td>—</td>
+                        <td>校验退款金额不超过订单金额</td>
+                    </tr>
+                    <tr>
+                        <td>验证</td>
+                        <td>直接编造一个退款结果回复用户</td>
+                        <td>校验数据库状态，确认退款成功</td>
+                    </tr>
+                    <tr>
+                        <td>纠正</td>
+                        <td>用户发现退款根本没发生</td>
+                        <td>API 调用超时则自动重试</td>
+                    </tr>
+                    </tbody>
+                </table>
             </div>
-          </div>
-          <div class="phase">
-            <div class="phase-label">Graph 工程<span>Graph Engineering</span></div>
-            <div class="phase-content">
-              <p><strong>2026 年 7 月</strong>——更高层的编排视角：把 Agent 循环、确定性程序和人工审批组织成显式的执行图，节点承担具体能力，边规定路由与依赖，结构化状态沿边传递并在关键边界处持久化。</p>
+
+            <h3>Harness 五功能概览</h3>
+            <div class="table-wrap">
+                <table class="note-table">
+                    <thead>
+                    <tr>
+                        <th>功能</th>
+                        <th>一句话职责</th>
+                        <th>与上下文 / 工具的关系</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td>Context（上下文）</td>
+                        <td>为模型提供感知信息</td>
+                        <td>核心能力</td>
+                    </tr>
+                    <tr>
+                        <td>Tools（工具接口）</td>
+                        <td>为模型提供观察与行动手段</td>
+                        <td>核心能力</td>
+                    </tr>
+                    <tr>
+                        <td>Constrain（约束）</td>
+                        <td>设定行为边界——能做什么、不能做什么</td>
+                        <td>围绕上下文和工具构建的安全边界</td>
+                    </tr>
+                    <tr>
+                        <td>Verify（验证）</td>
+                        <td>自动判断操作结果的对错</td>
+                        <td>围绕工具执行结果构建的检查机制</td>
+                    </tr>
+                    <tr>
+                        <td>Correct（纠正）</td>
+                        <td>发现问题时自动修正或回退</td>
+                        <td>围绕工具调用失败构建的恢复机制</td>
+                    </tr>
+                    </tbody>
+                </table>
             </div>
-          </div>
-        </div>
 
-        <div class="callout success" aria-label="层层包含">
-          <span class="callout-title">🔗 不是替代，而是层层包含</span>
-          <p>提示 ⊂ 上下文 ⊂ Harness ⊂ Loop ⊂ Graph。每一层都在前一层基础上扩展了工程师的关注范围和影响力；当各家模型能力越来越接近、不再是决定性的差异因素时，<strong>竞争优势就转移到了模型之外的工程实践</strong>。</p>
-        </div>
+            <div class="callout warning" aria-label="能做事 vs 不做错事">
+                <span class="callout-title">⚖️ 能做事 与 不做错事：重要性不对称</span>
+                <p>上下文与工具让 Agent <strong>“能做事”</strong>——理解任务并采取行动；约束、验证与纠正让 Agent <strong>“不做错事”</strong>——
+                    确保上下文和工具在生产环境中可靠运转。<strong>早期框架重在上下文与工具；生产级系统的重心已经转向约束、验证与纠正</strong>。
+                </p>
+            </div>
 
-        <h3>例证：LangChain 在 Terminal Bench 2.0 上的实践</h3>
-        <p>
-          他们的 Coding Agent 从 <strong>52.8% 提升到 66.5%</strong>（从排行榜 30 名开外跃升至前 5）——改变的不是模型，而是 Harness：让 Agent 自动检查自己的执行结果、检测是否陷入重复循环、优化思考策略等工程手段。
-        </p>
-        <p class="source-note">
-          Graph 工程：Josh C. Simmons 在 2026 年 7 月 4 日的文章 <a href="https://www.drjoshcsimmons.com/writing/we-are-entering-the-graph-engineering-phase" target="_blank" rel="noopener">We Are Entering the Graph Engineering Phase</a> 中较早明确使用这一名称；相关实践早于该名称——<a href="https://docs.langchain.com/oss/python/langgraph/overview" target="_blank" rel="noopener">LangGraph</a>、<a href="https://learn.microsoft.com/en-us/agent-framework/workflows/" target="_blank" rel="noopener">Microsoft Agent Framework</a> 和 <a href="https://adk.dev/workflows/" target="_blank" rel="noopener">Google ADK</a> 的官方文档分别称其为图编排或 graph-based workflow。
-        </p>
-      </section>
-
-      <!-- ============ 3. 五功能核心原则 ============ -->
-      <section class="note-section" id="five-functions">
-        <h2>3&nbsp;&nbsp;Harness 五个功能的核心原则（1.2.2）</h2>
-
-        <p>
-          下表进一步展开五个功能的核心设计原则和在本书中的对应章节，建立从概念到实践的映射：
-        </p>
-        <div class="table-wrap">
-          <table class="note-table">
-            <thead>
-              <tr>
-                <th>功能</th>
-                <th>核心原则</th>
-                <th>实际例子</th>
-                <th>详见</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>上下文</td>
-                <td><strong>信息充分性</strong>：让 Agent 在每个决策点都基于足够的信息判断</td>
-                <td>系统提示词、知识库、Agent 状态栏、Sidecar 旁路查询</td>
-                <td>第二、三章</td>
-              </tr>
-              <tr>
-                <td>工具</td>
-                <td><strong>接口清晰</strong>：工具命名直观、参数有例子、边界有说明</td>
-                <td>MCP 工具、代码解释器、搜索工具</td>
-                <td>第四章</td>
-              </tr>
-              <tr>
-                <td>约束</td>
-                <td><strong>故障安全默认值</strong>：所有能力默认关闭，必须显式开放（类似手机 App 权限管理）</td>
-                <td>Claude Code 中每个工具默认需用户授权才能执行</td>
-                <td>第四章</td>
-              </tr>
-              <tr>
-                <td>验证</td>
-                <td><strong>输入隔离</strong>：安全检查只看结构化数据（如工具返回的 JSON 字段），而不是模型自由生成的文本（攻击者可能通过提示注入操纵模型输出）</td>
-                <td>Linter 检查、类型系统、工具调用结果校验</td>
-                <td>第五、六章</td>
-              </tr>
-              <tr>
-                <td>纠正</td>
-                <td><strong>不暴露中间态</strong>：在确认无法恢复之前，不将半成品结果展示给用户——失败先静默重试</td>
-                <td>静默重试、接续生成、连续失败时回退到人工判断（熔断机制）</td>
-                <td>第二、五章</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="callout warning" aria-label="五功能闭环">
-          <span class="callout-title">🔁 五个功能构成闭环</span>
-          <p>上下文与工具支撑决策 → 约束预防错误 → 验证发现偏差 → 纠正闭合循环。<strong>缺少任何一环，系统都会出现可靠性缺口。</strong></p>
-        </div>
-      </section>
-
-      <!-- ============ 4. 三核心原则 ============ -->
-      <section class="note-section" id="principles">
-        <h2>4&nbsp;&nbsp;构建有效 Agent 的核心原则（1.2.3）</h2>
-
-        <p>根据 Anthropic 与数十个团队合作的经验，成功的 Agent 系统遵循三个核心原则：</p>
-
-        <div class="component-grid three" aria-label="三个核心原则">
-          <article class="component-card core">
-            <span class="index">01 · 保持简单</span>
-            <h3>Keep It Simple</h3>
-            <p>从最简单的方案开始，只在确实必要时才增加复杂度。</p>
-            <ul>
-              <li>直接 API 调用优于复杂框架，清晰代码优于聪明抽象</li>
-              <li>每多一层抽象，都会成为以后调试时新的盲区</li>
+            <h3>以 Claude Code 为例：Harness 的主体是保障机制</h3>
+            <p>
+                工具本身（文件读写、命令执行、搜索）只是 Harness 的一小部分，围绕工具构建的保障机制才是核心：
+            </p>
+            <ul class="checklist" aria-label="Claude Code 的 Harness 保障机制">
+                <li><strong>流程状态管理</strong>：追踪 Agent 当前执行到哪一步</li>
+                <li><strong>多层上下文压缩</strong>：信息太多时自动精简</li>
+                <li><strong>权限分类</strong>：控制哪些操作需要用户确认</li>
+                <li><strong>熔断器</strong>（Circuit Breaker）：错误连续发生时自动“断电”停止重试——就像保险丝自动跳闸，防止整个系统崩溃
+                </li>
+                <li><strong>错误恢复机制</strong>：捕获异常、回滚到上一稳定状态、重试或交还给人类</li>
             </ul>
-          </article>
-          <article class="component-card">
-            <span class="index">02 · 保持透明</span>
-            <h3>Keep It Transparent</h3>
-            <p>明确显示 Agent 的规划步骤、执行日志和决策轨迹。</p>
-            <ul>
-              <li>不只为了调试方便，也是让用户建立信任的前提</li>
-              <li>黑箱里的错误一旦发生，外部观察者既无法定位也无法纠正</li>
+            <p>
+                <strong>行业正在从“能做事”向“可靠地做事”转变，Harness 工程因此成为 Agent 系统的核心竞争力。</strong>
+            </p>
+        </section>
+
+        <!-- ============ 2. 范式演进 ============ -->
+        <section class="note-section" id="paradigm">
+            <h2>2&nbsp;&nbsp;工程范式演进：从提示工程到 Loop 工程</h2>
+
+            <p>回顾 AI 应用工程的发展，可以看到一条清晰的演进弧线：</p>
+
+            <div class="lifecycle-flow" aria-label="工程范式演进">
+                <div class="phase">
+                    <div class="phase-label">提示工程<span>Prompt Engineering</span></div>
+                    <div class="phase-content">
+                        <p><strong>第一波</strong>——通过优化输入给模型的自然语言指令，提升输出质量。</p>
+                    </div>
+                </div>
+                <div class="phase">
+                    <div class="phase-label">上下文工程<span>Context Engineering</span></div>
+                    <div class="phase-content">
+                        <p><strong>第二波</strong>——单纯优化提示词还不够，需要系统性地管理模型能看到的所有信息：系统指令、工具定义、对话历史、外部知识。
+                        </p>
+                    </div>
+                </div>
+                <div class="phase">
+                    <div class="phase-label">Harness 工程<span>Harness Engineering</span></div>
+                    <div class="phase-content">
+                        <p><strong>第三波</strong>——视野从“模型能看到什么”扩展到“Agent
+                            如何组织模型运行并与环境交互”：上下文与工具接口、约束机制、验证手段、反馈循环和错误恢复。</p>
+                    </div>
+                </div>
+                <div class="phase">
+                    <div class="phase-label">Loop 工程<span>Loop Engineering</span></div>
+                    <div class="phase-content">
+                        <p><strong>随后</strong>——从单次运行扩展到跨轮次的持续自主运转：谁来发现下一件该做的事、何时验证、何时才算真正完成（第十章结合多
+                            Agent 协作系统展开）。</p>
+                    </div>
+                </div>
+                <div class="phase">
+                    <div class="phase-label">Graph 工程<span>Graph Engineering</span></div>
+                    <div class="phase-content">
+                        <p><strong>2026 年 7 月</strong>——更高层的编排视角：把 Agent
+                            循环、确定性程序和人工审批组织成显式的执行图，节点承担具体能力，边规定路由与依赖，结构化状态沿边传递并在关键边界处持久化。
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="callout success" aria-label="层层包含">
+                <span class="callout-title">🔗 不是替代，而是层层包含</span>
+                <p>提示 ⊂ 上下文 ⊂ Harness ⊂ Loop ⊂ Graph。每一层都在前一层基础上扩展了工程师的关注范围和影响力；当各家模型能力越来越接近、不再是决定性的差异因素时，<strong>竞争优势就转移到了模型之外的工程实践</strong>。
+                </p>
+            </div>
+
+            <h3>例证：LangChain 在 Terminal Bench 2.0 上的实践</h3>
+            <p>
+                他们的 Coding Agent 从 <strong>52.8% 提升到 66.5%</strong>（从排行榜 30 名开外跃升至前 5）——改变的不是模型，而是
+                Harness：让 Agent 自动检查自己的执行结果、检测是否陷入重复循环、优化思考策略等工程手段。
+            </p>
+            <p class="source-note">
+                Graph 工程：Josh C. Simmons 在 2026 年 7 月 4 日的文章 <a
+                    href="https://www.drjoshcsimmons.com/writing/we-are-entering-the-graph-engineering-phase"
+                    target="_blank" rel="noopener">We Are Entering the Graph Engineering Phase</a>
+                中较早明确使用这一名称；相关实践早于该名称——<a
+                    href="https://docs.langchain.com/oss/python/langgraph/overview" target="_blank" rel="noopener">LangGraph</a>、<a
+                    href="https://learn.microsoft.com/en-us/agent-framework/workflows/" target="_blank" rel="noopener">Microsoft
+                Agent Framework</a> 和 <a href="https://adk.dev/workflows/" target="_blank" rel="noopener">Google
+                ADK</a> 的官方文档分别称其为图编排或 graph-based workflow。
+            </p>
+        </section>
+
+        <!-- ============ 3. 五功能核心原则 ============ -->
+        <section class="note-section" id="five-functions">
+            <h2>3&nbsp;&nbsp;Harness 五个功能的核心原则</h2>
+
+            <p>
+                下表进一步展开五个功能的核心设计原则和在本书中的对应章节，建立从概念到实践的映射：
+            </p>
+            <div class="table-wrap">
+                <table class="note-table">
+                    <thead>
+                    <tr>
+                        <th>功能</th>
+                        <th>核心原则</th>
+                        <th>实际例子</th>
+                        <th>详见</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td>上下文</td>
+                        <td><strong>信息充分性</strong>：让 Agent 在每个决策点都基于足够的信息判断</td>
+                        <td>系统提示词、知识库、Agent 状态栏、Sidecar 旁路查询</td>
+                        <td>第二、三章</td>
+                    </tr>
+                    <tr>
+                        <td>工具</td>
+                        <td><strong>接口清晰</strong>：工具命名直观、参数有例子、边界有说明</td>
+                        <td>MCP 工具、代码解释器、搜索工具</td>
+                        <td>第四章</td>
+                    </tr>
+                    <tr>
+                        <td>约束</td>
+                        <td><strong>故障安全默认值</strong>：所有能力默认关闭，必须显式开放（类似手机 App 权限管理）</td>
+                        <td>Claude Code 中每个工具默认需用户授权才能执行</td>
+                        <td>第四章</td>
+                    </tr>
+                    <tr>
+                        <td>验证</td>
+                        <td><strong>输入隔离</strong>：安全检查只看结构化数据（如工具返回的 JSON
+                            字段），而不是模型自由生成的文本（攻击者可能通过提示注入操纵模型输出）
+                        </td>
+                        <td>Linter 检查、类型系统、工具调用结果校验</td>
+                        <td>第五、六章</td>
+                    </tr>
+                    <tr>
+                        <td>纠正</td>
+                        <td><strong>不暴露中间态</strong>：在确认无法恢复之前，不将半成品结果展示给用户——失败先静默重试
+                        </td>
+                        <td>静默重试、接续生成、连续失败时回退到人工判断（熔断机制）</td>
+                        <td>第二、五章</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="callout warning" aria-label="五功能闭环">
+                <span class="callout-title">🔁 五个功能构成闭环</span>
+                <p>上下文与工具支撑决策 → 约束预防错误 → 验证发现偏差 →
+                    纠正闭合循环。<strong>缺少任何一环，系统都会出现可靠性缺口。</strong></p>
+            </div>
+        </section>
+
+        <!-- ============ 4. 三核心原则 ============ -->
+        <section class="note-section" id="principles">
+            <h2>4&nbsp;&nbsp;构建有效 Agent 的核心原则</h2>
+
+            <p>根据 Anthropic 与数十个团队合作的经验，成功的 Agent 系统遵循三个核心原则：</p>
+
+            <div class="component-grid three" aria-label="三个核心原则">
+                <article class="component-card core">
+                    <span class="index">01 · 保持简单</span>
+                    <h3>Keep It Simple</h3>
+                    <p>从最简单的方案开始，只在确实必要时才增加复杂度。</p>
+                    <ul>
+                        <li>直接 API 调用优于复杂框架，清晰代码优于聪明抽象</li>
+                        <li>每多一层抽象，都会成为以后调试时新的盲区</li>
+                    </ul>
+                </article>
+                <article class="component-card">
+                    <span class="index">02 · 保持透明</span>
+                    <h3>Keep It Transparent</h3>
+                    <p>明确显示 Agent 的规划步骤、执行日志和决策轨迹。</p>
+                    <ul>
+                        <li>不只为了调试方便，也是让用户建立信任的前提</li>
+                        <li>黑箱里的错误一旦发生，外部观察者既无法定位也无法纠正</li>
+                    </ul>
+                </article>
+                <article class="component-card">
+                    <span class="index">03 · 设计好工具接口</span>
+                    <h3>ACI · Agent-Computer Interface</h3>
+                    <p>从 Agent 视角设计接口（易理解、易使用），而非传统 API 的程序员视角。</p>
+                    <ul>
+                        <li>命名和参数要直观，易误用处从设计上让错误无法发生——<strong>防呆</strong>（Poka-yoke，源自丰田生产体系）
+                        </li>
+                        <li>例子：SIM 卡缺角让卡片只能从一个方向插入；微波炉门没关好就绝不加热</li>
+                        <li>模糊的接口会被模型放大成系统性的错误</li>
+                    </ul>
+                </article>
+            </div>
+        </section>
+
+        <!-- ============ 5. 模型选择 ============ -->
+        <section class="note-section" id="model-choice">
+            <h2>5&nbsp;&nbsp;如何选择模型</h2>
+
+            <p>
+                模型是 Agent 的智能基座，<strong>选对模型往往比优化提示词更有效</strong>。由于模型迭代极快，本节不推荐具体模型版本，而是给出选择的方向。
+            </p>
+
+            <div class="boundary-grid" aria-label="闭源与开源模型">
+                <article class="boundary-card primary">
+                    <span class="question">闭源模型</span>
+                    <h3>OpenAI（GPT/o 系列）· Anthropic（Claude 系列）</h3>
+                    <p>目前 Agent 开发中最常用的两大闭源厂商。</p>
+                    <ul>
+                        <li><strong>优势</strong>：通常在能力上领先</li>
+                        <li><strong>代价</strong>：成本较高、受限于厂商的 API 策略</li>
+                        <li><strong>建议</strong>：不要只看排行榜，要在自己的任务上做评估（见第六章）</li>
+                    </ul>
+                </article>
+                <article class="boundary-card">
+                    <span class="question">开源模型</span>
+                    <h3>DeepSeek · Kimi · GLM</h3>
+                    <p>与闭源差距在 6 个月以内，成本显著更低。</p>
+                    <ul>
+                        <li><strong>优势</strong>：可私有化部署、支持微调定制，适合成本敏感或数据合规场景</li>
+                        <li><strong>注意</strong>：不同模型在工具调用方面的能力差异很大，选型前务必在具体场景中测试</li>
+                    </ul>
+                </article>
+            </div>
+
+            <div class="callout warning" aria-label="策略边界">
+                <span class="callout-title">⚠️ 能力之外：策略边界</span>
+                <p>模型在基准测试中具备某种能力，<strong>≠ 承载它的产品一定允许用户调用</strong>。不同厂商对网络安全、模型蒸馏、模型提取、隐私数据和高风险操作设置不同策略边界；同一任务在聊天产品、Coding
+                    Agent 和 API 中可能得到不同结果。业务关键任务应提前准备人工接管或合规模型作为替代路径。</p>
+            </div>
+
+            <div class="component-grid" aria-label="思考能力与速度多模态">
+                <article class="component-card core">
+                    <span class="index">01 · 思考能力</span>
+                    <h3>Reasoning：绝大多数 Agent 的硬性要求</h3>
+                    <p>Agent 需要进行多步思考、工具选择等复杂决策，不带思考能力的模型在这些任务上表现往往很差。</p>
+                    <ul>
+                        <li><strong>例外</strong>：单步简单任务、Computer Use 中仅需点击固定位置的简单 GUI 操作</li>
+                        <li><strong>底线</strong>：只要涉及多步思考或动态决策，就一定要选择支持思考的模型</li>
+                    </ul>
+                </article>
+                <article class="component-card">
+                    <span class="index">02 · 速度与多模态</span>
+                    <h3>两个容易被忽视的维度</h3>
+                    <p>除了成本，选模型还要看输出速度与多模态支持。</p>
+                    <ul>
+                        <li><strong>输出速度</strong>：直接决定端到端延迟——20 轮推理 × 每轮慢 2 秒＝多等 40 秒</li>
+                        <li><strong>多模态</strong>：若需理解图片、音频或视频，多模态就是硬性要求</li>
+                    </ul>
+                </article>
+            </div>
+        </section>
+
+        <!-- ============ 6. 编排模式 ============ -->
+        <section class="note-section" id="orchestration">
+            <h2>6&nbsp;&nbsp;编排模式：工作流与自主</h2>
+
+            <p>
+                编排模式是 Harness 中“上下文与工具”层面的组织方式——它决定了上下文如何在 LLM
+                调用之间流动、工具如何被调度、执行路径是预先设定还是动态生成。遵循“从简单到复杂”的原则：先考虑单个 LLM 调用
+                → 需要多步骤时考虑工作流 → 需要动态决策时才用自主 Agent。记住：<strong>Agent
+                系统通常会用延迟和成本换取更好的任务性能</strong>。
+            </p>
+
+            <div class="boundary-grid" aria-label="工作流与自主对比">
+                <article class="boundary-card primary">
+                    <span class="question">确定性编排</span>
+                    <h3>工作流 Workflow</h3>
+                    <p>通过预定义代码路径编排 LLM 和工具——每一步做什么、下一步去哪都由代码写死，LLM
+                        只在节点内部负责理解和生成。</p>
+                    <p><strong>订机票示例（四个固定节点）：</strong></p>
+                    <ol class="steps">
+                        <li>核实用户身份——调用身份验证 API，确认用户是谁</li>
+                        <li>搜索可用航班——根据用户需求查询航班数据库</li>
+                        <li>完成付款——调用支付接口扣款</li>
+                        <li>确认预订——调用预订 API 锁定座位，向用户发送确认信息</li>
+                    </ol>
+                    <ul>
+                        <li><strong>优势</strong>：严格流程控制——“付款前不能预订”等业务规则靠代码强制，不依赖
+                            LLM；安全性高——提示注入或模型犯错最多影响当前节点，攻击面被限制在单个节点内
+                        </li>
+                        <li><strong>局限</strong>：缺乏变通——预设流程未覆盖时（临时改签、航班取消需替代方案），只能走预设异常分支或将控制权交还人类
+                        </li>
+                    </ul>
+                </article>
+                <article class="boundary-card">
+                    <span class="question"> 动态自主决策</span>
+                    <h3>自主 Agent Autonomous Agent</h3>
+                    <p>执行路径不是预先定义的，而是 Agent 根据环境反馈实时决定——本质上就是在循环中使用工具的
+                        LLM（ReAct）。</p>
+                    <p><strong>订机票示例（动态）：</strong>用户说“帮我订下周三去上海的机票”，Agent
+                        自行决定先搜索航班、发现需要登录、于是先核实身份、再回来搜索、发现最便宜的航班需要转机、主动询问用户是否接受、用户拒绝、Agent
+                        调整搜索条件……</p>
+                    <ul>
+                        <li><strong>能力</strong>：自主规划执行步骤，识别失败、调整策略——而不只是在出错时停下来</li>
+                        <li><strong>边界</strong>：自主性不等于无限制——必须设计明确的停止条件，否则容易陷入死循环或过度执行
+                        </li>
+                        <li><strong>适用</strong>：开放式问题——Coding Agent（SWE-bench）、Computer Use、迭代搜索分析的研究任务
+                        </li>
+                        <li><strong>风险</strong>：更高成本与复合错误——部署需沙盒充分测试、设置护栏与监控、关键决策点加入人机协作检查点
+                        </li>
+                    </ul>
+                </article>
+            </div>
+            <figure class="figure-center">
+                <img src="images/第一章·1.5.png" width="800">
+                <figcaption>图 1 ：自主 Agent 的执行循环</figcaption>
+            </figure>
+            <h3>自主 Agent 的退出条件（任一满足）</h3>
+            <ul class="checklist" aria-label="自主 Agent 退出条件">
+                <li>任务完成</li>
+                <li>调用 final_answer（最终输出工具）</li>
+                <li>模型返回没有任何工具调用的响应</li>
+                <li>错误次数超限</li>
+                <li>达到最大轮次</li>
             </ul>
-          </article>
-          <article class="component-card">
-            <span class="index">03 · 设计好工具接口</span>
-            <h3>ACI · Agent-Computer Interface</h3>
-            <p>从 Agent 视角设计接口（易理解、易使用），而非传统 API 的程序员视角。</p>
+
+            <div class="callout success" aria-label="混合模式">
+                <span class="callout-title">🔀 混合模式：并非非此即彼</span>
+                <p>关键的、有严格合规要求的流程用工作流确保可靠性，需要灵活决策的部分切到自主模式。例如n8n 是一个成熟的工作流自动化开源框架，
+开发者通过可视化界面拖拽功能组件来构建 Agent，可以在同一个系统中同时使用工作流节点和自主 Agent 节点。</p>
+            </div>
+                        <figure class="figure-center">
+                <img src="images/第一章·1.6.png" width="800">
+                <figcaption>图 2 ：n8n 工作流编辑器界面</figcaption>
+            </figure>
+
+            <h3> 主流 Agent 框架简要对比</h3>
+            <div class="table-wrap">
+                <table class="note-table">
+                    <thead>
+                    <tr>
+                        <th>框架 / 平台</th>
+                        <th>核心定位</th>
+                        <th>编排模式</th>
+                        <th>开发方式</th>
+                        <th>适用场景</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td>OpenAI Agents SDK</td>
+                        <td>轻量级 Agent 开发库</td>
+                        <td>自主（工具循环）</td>
+                        <td>代码优先</td>
+                        <td>快速原型、单 Agent 应用</td>
+                    </tr>
+                    <tr>
+                        <td>Claude Agent SDK</td>
+                        <td>生产级 Agent 开发框架</td>
+                        <td>自主（工具循环 + 子 Agent）</td>
+                        <td>代码优先</td>
+                        <td>复杂自主任务、Coding Agent</td>
+                    </tr>
+                    <tr>
+                        <td>LangChain / LangGraph</td>
+                        <td>通用 LLM 应用框架</td>
+                        <td>工作流 + 自主</td>
+                        <td>代码优先</td>
+                        <td>复杂链式思考、多步骤工作流</td>
+                    </tr>
+                    <tr>
+                        <td>n8n</td>
+                        <td>可视化工作流自动化</td>
+                        <td>工作流 + 自主</td>
+                        <td>低代码（可视化拖拽）</td>
+                        <td>业务自动化、非技术团队</td>
+                    </tr>
+                    <tr>
+                        <td>Dify</td>
+                        <td>LLM 应用开发平台</td>
+                        <td>工作流 + 对话式</td>
+                        <td>低代码 + API</td>
+                        <td>企业级 RAG、知识库应用</td>
+                    </tr>
+                    <tr>
+                        <td>CrewAI</td>
+                        <td>角色化多 Agent 编排</td>
+                        <td>Multi-Agent 协作</td>
+                        <td>代码优先</td>
+                        <td>团队式任务分解与执行</td>
+                    </tr>
+                    <tr>
+                        <td>OpenClaw</td>
+                        <td>开源全能个人 Agent</td>
+                        <td>自主 + 事件驱动</td>
+                        <td>配置 + 代码（自托管）</td>
+                        <td>个人助理、Deep Research、Computer Use、多平台消息集成</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="callout warning" aria-label="框架价值迁移">
+                <span class="callout-title">🧭 框架的核心价值已迁移</span>
+                <p>“模型即 Agent”深化后，框架核心价值不再局限于“编排 LLM 调用”——上下文管理、工具生态、安全约束、错误恢复等
+                    Harness
+                    工程反而更重要。选框架的关键不在于框架本身的复杂度，而在于它能否<strong>以最小的抽象层让你专注于业务逻辑</strong>。
+                </p>
+            </div>
+        </section>
+
+        <!-- ============ 7. 护栏与安全性 ============ -->
+        <section class="note-section" id="guardrails">
+            <h2>7&nbsp;&nbsp;护栏与安全性</h2>
+
+            <p>
+                护栏（Guardrails）是 Harness 中“约束、验证、纠正”层面的核心实现手段——构成保障 Agent
+                行为安全可控的分层防线。精心设计的护栏有助于管理数据隐私风险（例如防止系统提示泄露）或声誉风险（例如确保行为与品牌一致）。可以先针对已识别的风险设置护栏，然后在发现新漏洞时逐步添加。
+            </p>
+            <div class="callout warning" aria-label="另一类失败">
+                <span class="callout-title">⚠️ 另一类失败：误拒绝</span>
+                <p>为降低危险请求被放行，模型可能同时拒绝一部分合法但形式敏感的任务（例如授权的安全测试、模型蒸馏研究）。因此护栏评估不能只测“应当拒绝的请求是否被拦截”，还要测<strong>“明确允许的请求是否能够正常完成”</strong>。
+                </p>
+            </div>
+
+            <h3>1.2.6.1 护栏类型：按防护位置分为三类</h3>
+            <div class="component-grid three" aria-label="三类护栏">
+                <article class="component-card core">
+                    <span class="index">① 输入侧护栏</span>
+                    <h3>请求到达 Agent 之前拦截</h3>
+                    <p>在请求进入系统时就进行过滤，通常包含四种机制：</p>
+                    <ul>
+                        <li><strong>相关性分类器</strong>：标记偏离主题的查询</li>
+                        <li><strong>安全分类器</strong>：检测越狱（用户试图绕过安全限制）与提示注入（攻击者经外部数据间接操纵模型）
+                        </li>
+                        <li><strong>内容审核</strong>：标记有害或不当的输入</li>
+                        <li><strong>基于规则的保护</strong>：黑名单、输入长度限制、正则过滤器（防 SQL 注入等）</li>
+                    </ul>
+                </article>
+                <article class="component-card">
+                    <span class="index">② 执行侧护栏</span>
+                    <h3>工具调用时验证</h3>
+                    <p>核心是<strong>工具风险评级</strong>：根据操作是否可逆、权限等级、财务影响，为每个工具标注风险等级。
+                    </p>
+                    <ul>
+                        <li>风险等级：低 / 中 / 高</li>
+                        <li>高风险操作需额外审查或人工确认</li>
+                    </ul>
+                </article>
+                <article class="component-card">
+                    <span class="index">③ 输出侧护栏</span>
+                    <h3>响应返回用户之前检查</h3>
+                    <p>在结果离开 Agent 之前做最后一道把关：</p>
+                    <ul>
+                        <li><strong>PII 过滤器</strong>：审查身份证号、手机号等个人身份信息，防止不必要暴露</li>
+                        <li><strong>输出验证</strong>：通过内容检查确保回复与品牌价值一致</li>
+                        <li>注：正则过滤等机制输入侧、输出侧可兼用，按最常见位置归类</li>
+                    </ul>
+                </article>
+            </div>
+
+            <div class="callout success" aria-label="Constitutional Classifiers">
+                <span class="callout-title">🏭 工业实践：Anthropic 的 Constitutional Classifiers（宪法分类器）</span>
+                <p>分类器护栏的一个代表性实践（<a
+                        href="https://www.anthropic.com/research/next-generation-constitutional-classifiers"
+                        target="_blank" rel="noopener">Anthropic 研究页</a>），核心机制有三点：</p>
+                <ul>
+                    <li><strong>规则驱动</strong>：用自然语言写成的“宪法”（明确规定允许 / 禁止内容）生成合成训练数据，训练输入输出分类器
+                    </li>
+                    <li><strong>上下文联合判断</strong>：把用户提问与模型回答放在一起检查——有些回答单独看毫无问题（如“如何使用食品调味料”），只有对照提问才发现是化学试剂暗语
+                    </li>
+                    <li><strong>两级筛查</strong>：先用极轻量的探针（读取模型内部激活，几乎零成本）检查所有对话，可疑之处再交给更强的分类器复审——第一级误报较多也不影响体验，成本大降
+                    </li>
+                </ul>
+            </div>
+
+            <h3> 人工干预（Human in the loop，人在回路）</h3>
+            <p>
+                人工干预是一个关键的保护措施——让 Agent 无法完成任务时优雅地转移控制权。客户服务中升级到人工客服；Coding
+                Agent 中将控制权交还开发者。它在部署早期尤为重要：有助于识别失败模式、发现边缘情况、建立健壮的评估周期。
+            </p>
+            <p>通常有两种主要情况会触发人工干预：</p>
             <ul>
-              <li>命名和参数要直观，易误用处从设计上让错误无法发生——<strong>防呆</strong>（Poka-yoke，源自丰田生产体系）</li>
-              <li>例子：SIM 卡缺角让卡片只能从一个方向插入；微波炉门没关好就绝不加热</li>
-              <li>模糊的接口会被模型放大成系统性的错误</li>
+                <li><strong>超过失败阈值</strong>：为 Agent 的重试次数或操作次数设置上限，超限则升级到人工干预</li>
+                <li><strong>高风险操作</strong>：涉及敏感、不可逆或高风险的操作（如授权大额退款或付款），应触发人工监督——至少在团队对
+                    Agent 可靠性建立起足够信心之前
+                </li>
             </ul>
-          </article>
-        </div>
-      </section>
+        </section>
 
-      <!-- ============ 5. 模型选择 ============ -->
-      <section class="note-section" id="model-choice">
-        <h2>5&nbsp;&nbsp;如何选择模型（1.2.4）</h2>
+        <!-- ============ 8. 本书结构映射 ============ -->
+        <section class="note-section" id="book-map">
+            <h2>8&nbsp;&nbsp;本书作为 Harness 工程的实践指南（1.2.7）</h2>
 
-        <p>
-          模型是 Agent 的智能基座，<strong>选对模型往往比优化提示词更有效</strong>。由于模型迭代极快，本节不推荐具体模型版本，而是给出选择的方向。
-        </p>
+            <p>
+                从 Harness 工程的视角重新审视本书的结构，可以发现每一章都在系统性地构建 Harness
+                的某个组件。同时，安全不是某一章的独立话题，而是贯穿全书的<strong>横切关注点</strong>（Cross-cutting
+                Concern）——类似于日志记录需要渗透到每个模块中。
+            </p>
+            <div class="table-wrap">
+                <table class="note-table">
+                    <thead>
+                    <tr>
+                        <th>Harness 重点</th>
+                        <th>对应章节</th>
+                        <th>核心内容</th>
+                        <th>安全关注点</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td>上下文设计</td>
+                        <td>第二章（上下文工程）</td>
+                        <td>提示工程、Agent 状态栏、上下文压缩、Agent Skills</td>
+                        <td>提示注入与信息泄露</td>
+                    </tr>
+                    <tr>
+                        <td>上下文扩展（知识持久化）</td>
+                        <td>第三章（知识库）</td>
+                        <td>用户记忆、RAG、结构化索引、智能化 RAG</td>
+                        <td>敏感信息暴露、隐私保护</td>
+                    </tr>
+                    <tr>
+                        <td>工具设计与安全约束</td>
+                        <td>第四章（工具设计）</td>
+                        <td>工具分类、权限控制、MCP 标准、异步架构</td>
+                        <td>误操作、未授权访问、不可逆操作</td>
+                    </tr>
+                    <tr>
+                        <td>工具的验证与纠正</td>
+                        <td>第五章（代码生成）</td>
+                        <td>Coding Agent 的 Harness、测试驱动、代码化规则</td>
+                        <td>身份冒用、责任归属</td>
+                    </tr>
+                    <tr>
+                        <td>系统级验证</td>
+                        <td>第六章（评估）</td>
+                        <td>评估环境、数据集、自动化评估、可观测性</td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td>模型层面的纠正</td>
+                        <td>第七章（后训练）</td>
+                        <td>SFT、强化学习——将 Harness 中积累的反馈信号写入模型参数，可看作 Harness 工程的延伸</td>
+                        <td>目标偏离、对齐与鲁棒性</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
 
-        <div class="boundary-grid" aria-label="闭源与开源模型">
-          <article class="boundary-card primary">
-            <span class="question">闭源模型</span>
-            <h3>OpenAI（GPT/o 系列）· Anthropic（Claude 系列）</h3>
-            <p>目前 Agent 开发中最常用的两大闭源厂商。</p>
-            <ul>
-              <li><strong>优势</strong>：通常在能力上领先</li>
-              <li><strong>代价</strong>：成本较高、受限于厂商的 API 策略</li>
-              <li><strong>建议</strong>：不要只看排行榜，要在自己的任务上做评估（见第六章）</li>
-            </ul>
-          </article>
-          <article class="boundary-card">
-            <span class="question">开源模型</span>
-            <h3>DeepSeek · Kimi · GLM</h3>
-            <p>与闭源差距在 6 个月以内，成本显著更低。</p>
-            <ul>
-              <li><strong>优势</strong>：可私有化部署、支持微调定制，适合成本敏感或数据合规场景</li>
-              <li><strong>注意</strong>：不同模型在工具调用方面的能力差异很大，选型前务必在具体场景中测试</li>
-            </ul>
-          </article>
-        </div>
+        <!-- ============ 参考资料 ============ -->
+        <section class="note-section" id="references">
+            <h2>参考资料</h2>
+            <div class="sources-list">
+                <ul>
+                    <li><a href="https://www.drjoshcsimmons.com/writing/we-are-entering-the-graph-engineering-phase"
+                           target="_blank" rel="noopener">Josh C. Simmons, "We Are Entering the Graph Engineering
+                        Phase"</a> —— Graph 工程概念的早期提出
+                    </li>
+                    <li><a href="https://x.com/steipete/status/2078277297791189132" target="_blank" rel="noopener">Peter
+                        Steinberger 关于“是否已从 loops 转向 graphs”的讨论</a></li>
+                    <li><a href="https://docs.langchain.com/oss/python/langgraph/overview" target="_blank"
+                           rel="noopener">LangGraph 官方文档</a> —— 图编排 / graph-based workflow
+                    </li>
+                    <li><a href="https://learn.microsoft.com/en-us/agent-framework/workflows/" target="_blank"
+                           rel="noopener">Microsoft Agent Framework 文档</a> —— Workflows
+                    </li>
+                    <li><a href="https://adk.dev/workflows/" target="_blank" rel="noopener">Google ADK 文档</a> ——
+                        Workflows
+                    </li>
+                    <li><a href="https://www.anthropic.com/research/next-generation-constitutional-classifiers"
+                           target="_blank" rel="noopener">Anthropic, "Next-generation Constitutional Classifiers"</a> ——
+                        2026，通用越狱防护
+                    </li>
+                    <li><a href="https://arxiv.org/abs/2601.04603" target="_blank" rel="noopener">Cunningham et al.,
+                        "Constitutional Classifiers++: Efficient Production-Grade Defenses against Universal
+                        Jailbreaks"</a> —— arXiv:2601.04603
+                    </li>
+                </ul>
+            </div>
+        </section>
 
-        <div class="callout warning" aria-label="策略边界">
-          <span class="callout-title">⚠️ 能力之外：策略边界</span>
-          <p>模型在基准测试中具备某种能力，<strong>≠ 承载它的产品一定允许用户调用</strong>。不同厂商对网络安全、模型蒸馏、模型提取、隐私数据和高风险操作设置不同策略边界；同一任务在聊天产品、Coding Agent 和 API 中可能得到不同结果。业务关键任务应提前准备人工接管或合规模型作为替代路径。</p>
-        </div>
-
-        <div class="component-grid" aria-label="思考能力与速度多模态">
-          <article class="component-card core">
-            <span class="index">01 · 思考能力</span>
-            <h3>Reasoning：绝大多数 Agent 的硬性要求</h3>
-            <p>Agent 需要进行多步思考、工具选择等复杂决策，不带思考能力的模型在这些任务上表现往往很差。</p>
-            <ul>
-              <li><strong>例外</strong>：单步简单任务、Computer Use 中仅需点击固定位置的简单 GUI 操作</li>
-              <li><strong>底线</strong>：只要涉及多步思考或动态决策，就一定要选择支持思考的模型</li>
-            </ul>
-          </article>
-          <article class="component-card">
-            <span class="index">02 · 速度与多模态</span>
-            <h3>两个容易被忽视的维度</h3>
-            <p>除了成本，选模型还要看输出速度与多模态支持。</p>
-            <ul>
-              <li><strong>输出速度</strong>：直接决定端到端延迟——20 轮推理 × 每轮慢 2 秒＝多等 40 秒</li>
-              <li><strong>多模态</strong>：若需理解图片、音频或视频，多模态就是硬性要求</li>
-            </ul>
-          </article>
-        </div>
-      </section>
-
-      <!-- ============ 6. 编排模式 ============ -->
-      <section class="note-section" id="orchestration">
-        <h2>6&nbsp;&nbsp;编排模式：工作流与自主（1.2.5）</h2>
-
-        <p>
-          编排模式是 Harness 中“上下文与工具”层面的组织方式——它决定了上下文如何在 LLM 调用之间流动、工具如何被调度、执行路径是预先设定还是动态生成。遵循“从简单到复杂”的原则：先考虑单个 LLM 调用 → 需要多步骤时考虑工作流 → 需要动态决策时才用自主 Agent。记住：<strong>Agent 系统通常会用延迟和成本换取更好的任务性能</strong>。
-        </p>
-
-        <div class="boundary-grid" aria-label="工作流与自主对比">
-          <article class="boundary-card primary">
-            <span class="question">1.2.5.1 确定性编排</span>
-            <h3>工作流 Workflow</h3>
-            <p>通过预定义代码路径编排 LLM 和工具——每一步做什么、下一步去哪都由代码写死，LLM 只在节点内部负责理解和生成。</p>
-            <p><strong>订机票示例（四个固定节点）：</strong></p>
-            <ol class="steps">
-              <li>核实用户身份——调用身份验证 API，确认用户是谁</li>
-              <li>搜索可用航班——根据用户需求查询航班数据库</li>
-              <li>完成付款——调用支付接口扣款</li>
-              <li>确认预订——调用预订 API 锁定座位，向用户发送确认信息</li>
-            </ol>
-            <ul>
-              <li><strong>优势</strong>：严格流程控制——“付款前不能预订”等业务规则靠代码强制，不依赖 LLM；安全性高——提示注入或模型犯错最多影响当前节点，攻击面被限制在单个节点内</li>
-              <li><strong>局限</strong>：缺乏变通——预设流程未覆盖时（临时改签、航班取消需替代方案），只能走预设异常分支或将控制权交还人类</li>
-            </ul>
-          </article>
-          <article class="boundary-card">
-            <span class="question">1.2.5.2 动态自主决策</span>
-            <h3>自主 Agent Autonomous Agent</h3>
-            <p>执行路径不是预先定义的，而是 Agent 根据环境反馈实时决定——本质上就是在循环中使用工具的 LLM（ReAct）。</p>
-            <p><strong>订机票示例（动态）：</strong>用户说“帮我订下周三去上海的机票”，Agent 自行决定先搜索航班、发现需要登录、于是先核实身份、再回来搜索、发现最便宜的航班需要转机、主动询问用户是否接受、用户拒绝、Agent 调整搜索条件……</p>
-            <ul>
-              <li><strong>能力</strong>：自主规划执行步骤，识别失败、调整策略——而不只是在出错时停下来</li>
-              <li><strong>边界</strong>：自主性不等于无限制——必须设计明确的停止条件，否则容易陷入死循环或过度执行</li>
-              <li><strong>适用</strong>：开放式问题——Coding Agent（SWE-bench）、Computer Use、迭代搜索分析的研究任务</li>
-              <li><strong>风险</strong>：更高成本与复合错误——部署需沙盒充分测试、设置护栏与监控、关键决策点加入人机协作检查点</li>
-            </ul>
-          </article>
-        </div>
-
-        <h3>自主 Agent 的退出条件（任一满足）</h3>
-        <ul class="checklist" aria-label="自主 Agent 退出条件">
-          <li>任务完成</li>
-          <li>调用 final_answer（最终输出工具）</li>
-          <li>模型返回没有任何工具调用的响应</li>
-          <li>错误次数超限</li>
-          <li>达到最大轮次</li>
-        </ul>
-
-        <div class="callout success" aria-label="混合模式">
-          <span class="callout-title">🔀 1.2.5.3 混合模式：并非非此即彼</span>
-          <p>关键的、有严格合规要求的流程用工作流确保可靠性，需要灵活决策的部分切到自主模式。例如 n8n 可在同一系统中同时使用工作流节点与自主 Agent 节点。</p>
-        </div>
-
-        <h3>1.2.5.4 主流 Agent 框架简要对比</h3>
-        <div class="table-wrap">
-          <table class="note-table">
-            <thead>
-              <tr>
-                <th>框架 / 平台</th>
-                <th>核心定位</th>
-                <th>编排模式</th>
-                <th>开发方式</th>
-                <th>适用场景</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>OpenAI Agents SDK</td>
-                <td>轻量级 Agent 开发库</td>
-                <td>自主（工具循环）</td>
-                <td>代码优先</td>
-                <td>快速原型、单 Agent 应用</td>
-              </tr>
-              <tr>
-                <td>Claude Agent SDK</td>
-                <td>生产级 Agent 开发框架</td>
-                <td>自主（工具循环 + 子 Agent）</td>
-                <td>代码优先</td>
-                <td>复杂自主任务、Coding Agent</td>
-              </tr>
-              <tr>
-                <td>LangChain / LangGraph</td>
-                <td>通用 LLM 应用框架</td>
-                <td>工作流 + 自主</td>
-                <td>代码优先</td>
-                <td>复杂链式思考、多步骤工作流</td>
-              </tr>
-              <tr>
-                <td>n8n</td>
-                <td>可视化工作流自动化</td>
-                <td>工作流 + 自主</td>
-                <td>低代码（可视化拖拽）</td>
-                <td>业务自动化、非技术团队</td>
-              </tr>
-              <tr>
-                <td>Dify</td>
-                <td>LLM 应用开发平台</td>
-                <td>工作流 + 对话式</td>
-                <td>低代码 + API</td>
-                <td>企业级 RAG、知识库应用</td>
-              </tr>
-              <tr>
-                <td>CrewAI</td>
-                <td>角色化多 Agent 编排</td>
-                <td>Multi-Agent 协作</td>
-                <td>代码优先</td>
-                <td>团队式任务分解与执行</td>
-              </tr>
-              <tr>
-                <td>OpenClaw</td>
-                <td>开源全能个人 Agent</td>
-                <td>自主 + 事件驱动</td>
-                <td>配置 + 代码（自托管）</td>
-                <td>个人助理、Deep Research、Computer Use、多平台消息集成</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="callout warning" aria-label="框架价值迁移">
-          <span class="callout-title">🧭 框架的核心价值已迁移</span>
-          <p>“模型即 Agent”深化后，框架核心价值不再局限于“编排 LLM 调用”——上下文管理、工具生态、安全约束、错误恢复等 Harness 工程反而更重要。选框架的关键不在于框架本身的复杂度，而在于它能否<strong>以最小的抽象层让你专注于业务逻辑</strong>。</p>
-        </div>
-      </section>
-
-      <!-- ============ 7. 护栏与安全性 ============ -->
-      <section class="note-section" id="guardrails">
-        <h2>7&nbsp;&nbsp;护栏与安全性（1.2.6）</h2>
-
-        <p>
-          护栏（Guardrails）是 Harness 中“约束、验证、纠正”层面的核心实现手段——构成保障 Agent 行为安全可控的分层防线。精心设计的护栏有助于管理数据隐私风险（例如防止系统提示泄露）或声誉风险（例如确保行为与品牌一致）。可以先针对已识别的风险设置护栏，然后在发现新漏洞时逐步添加。
-        </p>
-        <div class="callout warning" aria-label="另一类失败">
-          <span class="callout-title">⚠️ 另一类失败：误拒绝</span>
-          <p>为降低危险请求被放行，模型可能同时拒绝一部分合法但形式敏感的任务（例如授权的安全测试、模型蒸馏研究）。因此护栏评估不能只测“应当拒绝的请求是否被拦截”，还要测<strong>“明确允许的请求是否能够正常完成”</strong>。</p>
-        </div>
-
-        <h3>1.2.6.1 护栏类型：按防护位置分为三类</h3>
-        <div class="component-grid three" aria-label="三类护栏">
-          <article class="component-card core">
-            <span class="index">① 输入侧护栏</span>
-            <h3>请求到达 Agent 之前拦截</h3>
-            <p>在请求进入系统时就进行过滤，通常包含四种机制：</p>
-            <ul>
-              <li><strong>相关性分类器</strong>：标记偏离主题的查询</li>
-              <li><strong>安全分类器</strong>：检测越狱（用户试图绕过安全限制）与提示注入（攻击者经外部数据间接操纵模型）</li>
-              <li><strong>内容审核</strong>：标记有害或不当的输入</li>
-              <li><strong>基于规则的保护</strong>：黑名单、输入长度限制、正则过滤器（防 SQL 注入等）</li>
-            </ul>
-          </article>
-          <article class="component-card">
-            <span class="index">② 执行侧护栏</span>
-            <h3>工具调用时验证</h3>
-            <p>核心是<strong>工具风险评级</strong>：根据操作是否可逆、权限等级、财务影响，为每个工具标注风险等级。</p>
-            <ul>
-              <li>风险等级：低 / 中 / 高</li>
-              <li>高风险操作需额外审查或人工确认</li>
-            </ul>
-          </article>
-          <article class="component-card">
-            <span class="index">③ 输出侧护栏</span>
-            <h3>响应返回用户之前检查</h3>
-            <p>在结果离开 Agent 之前做最后一道把关：</p>
-            <ul>
-              <li><strong>PII 过滤器</strong>：审查身份证号、手机号等个人身份信息，防止不必要暴露</li>
-              <li><strong>输出验证</strong>：通过内容检查确保回复与品牌价值一致</li>
-              <li>注：正则过滤等机制输入侧、输出侧可兼用，按最常见位置归类</li>
-            </ul>
-          </article>
-        </div>
-
-        <div class="callout success" aria-label="Constitutional Classifiers">
-          <span class="callout-title">🏭 工业实践：Anthropic 的 Constitutional Classifiers（宪法分类器）</span>
-          <p>分类器护栏的一个代表性实践（<a href="https://www.anthropic.com/research/next-generation-constitutional-classifiers" target="_blank" rel="noopener">Anthropic 研究页</a>），核心机制有三点：</p>
-          <ul>
-            <li><strong>规则驱动</strong>：用自然语言写成的“宪法”（明确规定允许 / 禁止内容）生成合成训练数据，训练输入输出分类器</li>
-            <li><strong>上下文联合判断</strong>：把用户提问与模型回答放在一起检查——有些回答单独看毫无问题（如“如何使用食品调味料”），只有对照提问才发现是化学试剂暗语</li>
-            <li><strong>两级筛查</strong>：先用极轻量的探针（读取模型内部激活，几乎零成本）检查所有对话，可疑之处再交给更强的分类器复审——第一级误报较多也不影响体验，成本大降</li>
-          </ul>
-        </div>
-
-        <h3>1.2.6.2 人工干预（Human in the loop，人在回路）</h3>
-        <p>
-          人工干预是一个关键的保护措施——让 Agent 无法完成任务时优雅地转移控制权。客户服务中升级到人工客服；Coding Agent 中将控制权交还开发者。它在部署早期尤为重要：有助于识别失败模式、发现边缘情况、建立健壮的评估周期。
-        </p>
-        <p>通常有两种主要情况会触发人工干预：</p>
-        <ul>
-          <li><strong>超过失败阈值</strong>：为 Agent 的重试次数或操作次数设置上限，超限则升级到人工干预</li>
-          <li><strong>高风险操作</strong>：涉及敏感、不可逆或高风险的操作（如授权大额退款或付款），应触发人工监督——至少在团队对 Agent 可靠性建立起足够信心之前</li>
-        </ul>
-      </section>
-
-      <!-- ============ 8. 本书结构映射 ============ -->
-      <section class="note-section" id="book-map">
-        <h2>8&nbsp;&nbsp;本书作为 Harness 工程的实践指南（1.2.7）</h2>
-
-        <p>
-          从 Harness 工程的视角重新审视本书的结构，可以发现每一章都在系统性地构建 Harness 的某个组件。同时，安全不是某一章的独立话题，而是贯穿全书的<strong>横切关注点</strong>（Cross-cutting Concern）——类似于日志记录需要渗透到每个模块中。
-        </p>
-        <div class="table-wrap">
-          <table class="note-table">
-            <thead>
-              <tr>
-                <th>Harness 重点</th>
-                <th>对应章节</th>
-                <th>核心内容</th>
-                <th>安全关注点</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>上下文设计</td>
-                <td>第二章（上下文工程）</td>
-                <td>提示工程、Agent 状态栏、上下文压缩、Agent Skills</td>
-                <td>提示注入与信息泄露</td>
-              </tr>
-              <tr>
-                <td>上下文扩展（知识持久化）</td>
-                <td>第三章（知识库）</td>
-                <td>用户记忆、RAG、结构化索引、智能化 RAG</td>
-                <td>敏感信息暴露、隐私保护</td>
-              </tr>
-              <tr>
-                <td>工具设计与安全约束</td>
-                <td>第四章（工具设计）</td>
-                <td>工具分类、权限控制、MCP 标准、异步架构</td>
-                <td>误操作、未授权访问、不可逆操作</td>
-              </tr>
-              <tr>
-                <td>工具的验证与纠正</td>
-                <td>第五章（代码生成）</td>
-                <td>Coding Agent 的 Harness、测试驱动、代码化规则</td>
-                <td>身份冒用、责任归属</td>
-              </tr>
-              <tr>
-                <td>系统级验证</td>
-                <td>第六章（评估）</td>
-                <td>评估环境、数据集、自动化评估、可观测性</td>
-                <td>—</td>
-              </tr>
-              <tr>
-                <td>模型层面的纠正</td>
-                <td>第七章（后训练）</td>
-                <td>SFT、强化学习——将 Harness 中积累的反馈信号写入模型参数，可看作 Harness 工程的延伸</td>
-                <td>目标偏离、对齐与鲁棒性</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- ============ 参考资料 ============ -->
-      <section class="note-section" id="references">
-        <h2>参考资料</h2>
-        <div class="sources-list">
-          <ul>
-            <li><a href="https://www.drjoshcsimmons.com/writing/we-are-entering-the-graph-engineering-phase" target="_blank" rel="noopener">Josh C. Simmons, "We Are Entering the Graph Engineering Phase"</a> —— Graph 工程概念的早期提出</li>
-            <li><a href="https://x.com/steipete/status/2078277297791189132" target="_blank" rel="noopener">Peter Steinberger 关于“是否已从 loops 转向 graphs”的讨论</a></li>
-            <li><a href="https://docs.langchain.com/oss/python/langgraph/overview" target="_blank" rel="noopener">LangGraph 官方文档</a> —— 图编排 / graph-based workflow</li>
-            <li><a href="https://learn.microsoft.com/en-us/agent-framework/workflows/" target="_blank" rel="noopener">Microsoft Agent Framework 文档</a> —— Workflows</li>
-            <li><a href="https://adk.dev/workflows/" target="_blank" rel="noopener">Google ADK 文档</a> —— Workflows</li>
-            <li><a href="https://www.anthropic.com/research/next-generation-constitutional-classifiers" target="_blank" rel="noopener">Anthropic, "Next-generation Constitutional Classifiers"</a> —— 2026，通用越狱防护</li>
-            <li><a href="https://arxiv.org/abs/2601.04603" target="_blank" rel="noopener">Cunningham et al., "Constitutional Classifiers++: Efficient Production-Grade Defenses against Universal Jailbreaks"</a> —— arXiv:2601.04603</li>
-            <li>李博杰，《深入理解 AI Agent：设计原理与工程实践》——第 1 章 1.2 节</li>
-          </ul>
-        </div>
-        <p class="source-note">
-          说明：本页为对原书 1.2 节内容的结构化重组与学习笔记式归纳，示例与表述为笔记式总结，并非原文逐段转载；Terminal Bench 2.0 数据、框架对比表等以原书为准。
-        </p>
-      </section>
-
-      <a href="#top" class="back-to-top">↑ 返回顶部</a>
+        <a href="#top" class="back-to-top">↑ 返回顶部</a>
     </main>
-  </div>
-
-  <script>
-    (function () {
-      function copyText(btn, target) {
-        var text = target.innerText;
-        function done(ok) {
-          btn.classList.add(ok ? 'copied' : 'copy-failed');
-          btn.textContent = ok ? '已复制 ✓' : '复制失败';
-          setTimeout(function () {
-            btn.classList.remove('copied', 'copy-failed');
-            btn.textContent = '复制代码';
-          }, 1600);
-        }
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
-        } else {
-          var ta = document.createElement('textarea');
-          ta.value = text;
-          document.body.appendChild(ta);
-          ta.select();
-          try { document.execCommand('copy'); done(true); }
-          catch (e) { done(false); }
-          document.body.removeChild(ta);
-        }
-      }
-      document.querySelectorAll('.copy-btn[data-copy-target]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          var target = document.getElementById(btn.getAttribute('data-copy-target'));
-          if (target) copyText(btn, target);
-        });
-      });
-    })();
-  </script>
+</div>
 </body>
 </html>

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>第二章 · 2.5 动态提示词与 Agent Skills</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="../../image/favicon.jpg" type="image/x-icon">
+</head>
+<body class="notes-page agent-system-page" id="top">
+  <div class="notes-layout">
+    <aside class="notes-sidebar">
+      <h1 class="notes-brand">第二章 上下文工程</h1>
+      <p class="notes-subtitle">《深入理解 AI Agent：设计原理与工程实践》读书笔记 · 2.5</p>
+      <div class="notes-home-links">
+        <a href="../../notes-index.html">← Notes index</a>
+        <a href="../../index.html">Home</a>
+      </div>
+      <nav class="notes-nav" aria-label="Agent Skills 知识点">
+        <h2 class="notes-nav-title">Knowledge Points</h2>
+        <ul>
+          <li><a href="#motivation">1 从静态到动态的演进</a></li>
+          <li><a href="#layers">2 渐进式披露的三层结构（2.5.1）</a></li>
+          <li><a href="#routing">3 元数据与路由决策</a></li>
+          <li><a href="#value">4 Skills 的价值与生态（2.5.1 续）</a></li>
+          <li><a href="#position">5 Skills 在上下文中的位置（2.5.2）</a></li>
+          <li><a href="#cache-evolution">6 KV Cache 随轨迹的演化</a></li>
+          <li><a href="#tools-relation">7 Skills 与工具的关系（2.5.3）</a></li>
+          <li><a href="#experiment">8 实验 2-6：论文生成演示文稿</a></li>
+          <li><a href="#references">参考资料</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main class="notes-content note-body">
+      <p class="note-meta">更新于 2026 年 8 月</p>
+      <h1>2.5　动态提示词与 Agent Skills</h1>
+      <p class="note-lead">
+        随着 Agent 覆盖的业务场景越来越多，系统提示词会不断膨胀。把客服场景的退款规则、编程场景的代码规范、文档场景的格式要求……全部塞进一个提示词，会带来两个问题：<strong>浪费 token</strong>（大部分内容与当前任务无关）与<strong>注意力被稀释</strong>（无关信息过多稀释模型对关键内容的注意力）。这就是从静态提示工程到动态提示词的自然演进——<strong>不是把所有知识一次性塞给 Agent，而是让它按需加载</strong>。Agent Skills 系统正是这一理念的工程化实现。
+      </p>
+
+      <!-- ============ 1. 演进 ============ -->
+      <section class="note-section" id="motivation">
+        <h2>1&nbsp;&nbsp;从静态提示工程到动态提示词</h2>
+        <div class="callout warning" aria-label="提示词膨胀的两个问题">
+          <span class="callout-title">💥 系统提示词膨胀的两个问题</span>
+          <p><strong>浪费 token</strong>：大部分内容与当前任务无关；<strong>注意力被稀释</strong>：上下文中无关信息过多会稀释模型对关键内容的注意力（这一问题将在 2.7 上下文压缩策略部分以“上下文腐化”的概念详细讨论）。</p>
+        </div>
+        <div class="definition-box" aria-label="动态提示词定义">
+          <span class="definition-label">动态提示词</span>
+          <p class="definition-sentence">
+            不是把所有知识一次性塞给 Agent，而是让它按需加载。<strong>Agent Skills 系统正是这一理念的工程化实现。</strong>
+          </p>
+        </div>
+      </section>
+
+      <!-- ============ 2. 三层结构 ============ -->
+      <section class="note-section" id="layers">
+        <h2>2&nbsp;&nbsp;Skills：领域能力的可组合单元（2.5.1）</h2>
+        <p>
+          Agent Skills 的核心思想是<strong>将 Agent 的能力模块化为独立的、可按需加载的知识包</strong>。每个 Skill 本质上是一套包含专业领域指导的提示词集合，就像为新员工准备的某个专项任务的操作手册。与传统的将所有指令塞入单一系统提示词的做法不同，Skills 采用了<strong>渐进式披露（Progressive Disclosure）</strong>的设计哲学——先给 Agent 看一份目录摘要，需要时再加载完整内容，就像你不会把公司所有部门的操作手册都堆到新员工桌上，而是先给一份总目录，需要哪本再去取。
+        </p>
+
+        <h3>以 PPTX Skill 为例的三层结构</h3>
+        <div class="lifecycle-flow" aria-label="Skills 渐进式披露">
+          <div class="phase">
+            <div class="phase-label">第一层：元数据<span>启动时加载，~300 tokens</span></div>
+            <div class="phase-content">
+              <pre><code>skills: [{name: "PPTX", desc: "Create PowerPoint presentations from content"},
+        {name: "PDF",   desc: "Extract and analyze PDF documents"}, ...]</code></pre>
+              <p>任务触发："从论文生成 PPT"</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-label">第二层：SKILL.md 核心流程<span>按需加载，~2K tokens</span></div>
+            <div class="phase-content">
+              <pre><code>PPTX Skill 核心流程:
+1. markitdown 提取文本 → 2. 解压 PPTX 访问 XML
+3. 修改 slide{N}.xml 内容 → 4. 重新打包为 .pptx
+引用: → html2pptx.md | → reference.md | → scripts/</code></pre>
+              <p>需要详细方法："用 HTML 模板创建 PPT"</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-label">第三层：子文档<span>选择性深入，按需加载</span></div>
+            <div class="phase-content">
+              <p><code>html2pptx.md</code>：HTML 模板 → PPT 的完整工作流；<code>reference.md</code>：XML 格式规范和技术细节；<code>scripts/*.py</code>：可执行工具（thumbnail.py 等）。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout success" aria-label="缓存友好">
+          <span class="callout-title">⚡ 元数据固定 → KV Cache 友好 · 动态内容追加 → 不破坏缓存</span>
+          <p>这是 Skills 渐进式披露机制的根本设计：常驻内容固定（可复用前缀缓存），按需加载的内容以追加方式进入轨迹。</p>
+        </div>
+      </section>
+
+      <!-- ============ 3. 路由决策 ============ -->
+      <section class="note-section" id="routing">
+        <h2>3&nbsp;&nbsp;元数据与路由决策</h2>
+        <h3>第一层：SKILL.md 的 YAML frontmatter</h3>
+        <p>
+          每个 Skill 必须包含一个 SKILL.md 文件，开头是 YAML frontmatter（文件顶部用 <code>---</code> 分隔的元数据块，类似书籍的版权页），包含 <strong>name</strong> 和 <strong>description</strong> 两个字段。在 Anthropic 公开描述的实现和 Claude Code 默认配置中，Agent 启动时会扫描可用 Skill，将它们的 name 和 description（仅占数百个 token）<strong>预加载到 system prompt</strong>，使 Agent 在不加载所有 Skill 正文的前提下知晓自己拥有哪些专业能力。Agent Skills 开放标准并不强制这一消息位置：其他运行时也可以把目录放进专用激活工具的 description。
+        </p>
+        <div class="callout warning" aria-label="路由决策关键">
+          <span class="callout-title">🧭 description 是路由决策的关键</span>
+          <p>元数据中的 description 字段应当足够短（控制常驻的 token 量），但写法要像<strong>路由条件而非功能介绍</strong>。最直接的写法是 "Use when / Don't use when" 加上几条反例（明确列出“不该触发此 Skill”的场景）。</p>
+          <ul>
+            <li>实践中，<strong>缺少反例的 Skill 描述会让路由准确率明显下降</strong>——宽泛的描述会在不相关的任务上频繁误触发；补上反例后路由准确率显著回升</li>
+            <li>反例不是可选项，而是 Skill 路由能否准确触发的关键</li>
+            <li>描述太宽泛（如 "help with backend"）等于任何后端相关的工作都能触发，路由就会失准；<strong>真正有效的描述是路由条件——“何时该用我”比“我能做什么”重要得多</strong></li>
+          </ul>
+        </div>
+        <h3>第二、三层：按需加载与选择性深入</h3>
+        <p>
+          当 Agent 判断某个任务需要特定的 Skill 时，运行时才加载完整的 SKILL.md。Claude Code 会在调用位置把 Skill 指令作为 user message 加入会话；采用文件读取或专用激活工具的其他运行时，也可以把内容作为 tool result 返回。以 PPTX Skill 为例，其中包含处理 PowerPoint 文件的核心流程：如何通过 <strong>markitdown</strong>（Microsoft 开源的文档转 Markdown 工具）提取文本，如何解压 PPTX 文件访问原始的 XML 结构，以及关键文件的路径约定。
+        </p>
+        <p>
+          第三层通过文件引用深入到更详细的子文档。主文件引用了 html2pptx.md（通过 HTML 模板创建 PowerPoint 的详细工作流）、reference.md（格式技术细节）等。Agent 会根据具体的需求<strong>选择性地深入阅读</strong>相关的子文档。
+        </p>
+        <p>
+          <strong>Skill 不仅包含指导性的文档，还可以捆绑可执行的代码工具和模板文件</strong>——从纯粹的知识传递升级为实际的能力赋予。
+        </p>
+      </section>
+
+      <!-- ============ 4. 价值 ============ -->
+      <section class="note-section" id="value">
+        <h2>4&nbsp;&nbsp;Skills 的价值与生态</h2>
+        <p>
+          Skills 的价值不仅在于优雅的上下文管理，更在于<strong>为领域知识的积累提供了一条可持续的路径</strong>。每个 Skill 都是自包含的知识模块，可以独立开发、测试、进行版本控制和分享。这种模块化使得 Agent 的能力扩展从集中式的系统提示词编辑，转变为<strong>分布式的、社区驱动的 Skill 生态构建</strong>——这与开源软件的包管理系统（如 Python 的 pip、Node.js 的 npm）有深刻的相似性，每个 Skill 封装了某个领域的最佳实践。
+        </p>
+        <p>
+          Anthropic 官方的 Skills 仓库已涵盖文档处理（PPTX、PDF、DOCX）、数据分析、代码生成等领域，开发者可以直接使用、定制或创建全新的 Skill。
+        </p>
+        <div class="callout success" aria-label="对齐训练方法论">
+          <span class="callout-title">🎯 一个对 Agent 开发者很重要的原则</span>
+          <p><strong>选择 Agent 交互模式时应对齐模型厂商的训练方法论</strong>。使用 Claude 构建 Agent 时，应充分利用 Skills 和结构化系统提示；使用其他模型时，应采用该模型厂商专门优化过的交互约定。<strong>基础模型公司推行的 Agent 用法，本质上是它们专门训练过的模式</strong>，这使得同一生态内的模型天然具有最优的表现。</p>
+        </div>
+      </section>
+
+      <!-- ============ 5. 上下文位置 ============ -->
+      <section class="note-section" id="position">
+        <h2>5&nbsp;&nbsp;Skills 在上下文中的位置（2.5.2）</h2>
+        <p>
+          理解 Skills 的上下文成本时，必须把<strong>“元数据目录”</strong>和<strong>“完整 Skill 指令”</strong>分开：
+        </p>
+        <div class="boundary-grid" aria-label="元数据与完整指令">
+          <article class="boundary-card primary">
+            <span class="question">元数据目录 · 会话启动时</span>
+            <h3>位于 system prompt</h3>
+            <p>Anthropic 对 Agent Skills 的说明明确指出，运行时会在启动时把所有已安装 Skill 的 name 与 description 预加载进 system prompt。Claude Code 的上下文文档也将其描述为“会话启动时加载、每次请求可见”。</p>
+            <p><strong>只要会话内的 Skill 集合不变，这部分就是稳定前缀，可以持续复用 Prompt Cache</strong>。Agent Skills 开放标准也允许把目录放进专用激活工具的 description——这是另一种固定前缀位置，而不是运行时状态栏。</p>
+          </article>
+          <article class="boundary-card">
+            <span class="question">完整 Skill 指令 · 调用时</span>
+            <h3>进入会话历史</h3>
+            <p>模型根据元数据选中 Skill 后，运行时才加载 SKILL.md 正文。当前 Claude Code 将指令作为 <strong>user message</strong> 注入调用位置；其他兼容 Agent Skills 的运行时也可以通过文件读取或专用激活工具返回正文。</p>
+            <p><strong>无论采用哪种激活方式，都不需要回头修改已经缓存的 system prompt。</strong></p>
+          </article>
+        </div>
+
+        <h3>启用 Skills 后 Agent Trajectory 的完整结构</h3>
+        <p>以 Claude Code / Anthropic 实现为例，元数据从启动时就在 system prompt；完整指令在调用点按需加入会话：</p>
+        <details class="code-example">
+          <summary>
+            <span class="code-summary-main">
+              <span class="code-lang">text</span>
+              <strong class="code-file">trajectory_structure.txt</strong>
+              <span class="code-caption">启用 Skills 后的轨迹结构 · 展开查看</span>
+            </span>
+            <span class="code-actions">
+              <button type="button" class="copy-btn" data-copy-target="trajectory-structure-source">复制代码</button>
+              <span class="code-chevron">⌄</span>
+            </span>
+          </summary>
+          <div class="code-panel">
+            <pre><code id="trajectory-structure-source" class="language-text">
+request context:
+
+{ role: "system", content:                                  Ⓐ Skill 元数据目录
+  "你是 Claude Code 助手...                                    会话启动时加载
+                                                            属于 system prompt
+  &lt;available_skills&gt;pdf, pptx, ...&lt;/available_skills&gt;" }
+
+tools: [Read, Bash, Edit, Write, ...]                       稳定启动前缀
+                                                            可复用 Prompt Cache
+
+{ role: "user", content: "帮我从这个 PDF 生成 PPT" }
+
+{ role: "user", isMeta: true, content:                      Ⓑ Skill 完整内容
+  "Base directory: ...\n# PPTX Skill                         调用时才加载
+                                                            进入会话历史
+  ## Workflow: 1. Use markitdown..." }
+
+{ role: "assistant", tool_calls: [Read("input.pdf")] }
+
+{ role: "tool", content: "...PDF 文本内容..." }
+
+{ role: "assistant", tool_calls: [Write("slides.html")] }
+
+{ role: "tool", content: "Wrote 12345 bytes" }
+</code></pre>
+          </div>
+        </details>
+        <p>
+          这种<strong>“少量目录常驻、完整正文按需加载”的两层设计，才是 Skills 兼顾可发现性与上下文开销的关键</strong>。
+        </p>
+      </section>
+
+      <!-- ============ 6. KV Cache 演化 ============ -->
+      <section class="note-section" id="cache-evolution">
+        <h2>6&nbsp;&nbsp;KV Cache 随 Agent Trajectory 增长的演化</h2>
+        <p>以“从 PDF 生成 PPT”为例，追踪三轮交互中 KV Cache 的演化（NEW = 本轮新增，需首次计算；HIT = 复用已缓存前缀）：</p>
+        <div class="table-wrap">
+          <table class="note-table">
+            <thead>
+              <tr>
+                <th>轨迹块</th>
+                <th>Turn 1（启动并调用 PPTX Skill）</th>
+                <th>Turn 2（读取 PDF 文件）</th>
+                <th>Turn 3（写出 HTML）</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>system + skill_catalog</td>
+                <td><strong>NEW</strong></td>
+                <td>HIT</td>
+                <td>HIT</td>
+              </tr>
+              <tr>
+                <td>tools</td>
+                <td><strong>NEW</strong></td>
+                <td>HIT</td>
+                <td>HIT</td>
+              </tr>
+              <tr>
+                <td>user_q1</td>
+                <td><strong>NEW</strong></td>
+                <td>HIT</td>
+                <td>HIT</td>
+              </tr>
+              <tr>
+                <td>★ skill_content</td>
+                <td><strong>NEW</strong></td>
+                <td>HIT</td>
+                <td>HIT</td>
+              </tr>
+              <tr>
+                <td>asst: Read(pdf)</td>
+                <td>—</td>
+                <td><strong>NEW</strong></td>
+                <td>HIT</td>
+              </tr>
+              <tr>
+                <td>tool_result</td>
+                <td>—</td>
+                <td><strong>NEW</strong></td>
+                <td>HIT</td>
+              </tr>
+              <tr>
+                <td>asst: Write(html)</td>
+                <td>—</td>
+                <td>—</td>
+                <td><strong>NEW</strong></td>
+              </tr>
+              <tr>
+                <td>tool_result</td>
+                <td>—</td>
+                <td>—</td>
+                <td><strong>NEW</strong></td>
+              </tr>
+              <tr>
+                <td><strong>本轮 cache_creation（示意）</strong></td>
+                <td>≈ 2.5k tokens</td>
+                <td>≈ 0.5k tokens</td>
+                <td>≈ 0.4k tokens</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout warning" aria-label="误解澄清">
+          <span class="callout-title">🔎 需要厘清一个常见误解：“对 KV Cache 友好”并非“零成本”</span>
+          <ul>
+            <li>Skill 元数据目录作为 system prompt 的一部分，需要在会话开始时完成<strong>一次 prefill</strong>；后续请求可以按缓存读取计费</li>
+            <li>完整 Skill 正文首次加载时也需要计算，之后才随稳定的会话前缀一起复用缓存</li>
+            <li>收益来自两点：<strong>无需在启动时加载所有 Skill 正文</strong>，也<strong>无需在每次调用新 Skill 时改写已有前缀</strong></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ============ 7. 工具关系 ============ -->
+      <section class="note-section" id="tools-relation">
+        <h2>7&nbsp;&nbsp;Skills 与工具的关系（2.5.3）</h2>
+        <p>
+          从上下文管理的角度看，Skills 机制对 KV Cache 极为友好。如果把所有专用代码工具的定义都放在系统提示词中，<strong>数量膨胀会消耗大量 token，而且会干扰模型的注意力</strong>；而在 Skill + 通用执行器的模式下：
+        </p>
+        <div class="boundary-grid" aria-label="两种形态对比">
+          <article class="boundary-card">
+            <span class="question">把所有专用工具定义塞进系统提示词</span>
+            <h3>工具数量膨胀</h3>
+            <p>大量专用代码工具的定义占满静态前缀，消耗大量 token，干扰模型注意力。</p>
+          </article>
+          <article class="boundary-card primary">
+            <span class="question">Skill + 通用执行器</span>
+            <h3>工具数量始终很少</h3>
+            <p>核心工具始终只有七个左右（如第五章所示），Skill 的内容通过渐进式披露机制按需加载，不会影响已缓存的前缀。</p>
+          </article>
+        </div>
+        <p>
+          两种形态的详细对比和选择框架见第四章；第八章则探讨 Agent 在持续进化中如何判断一项经验应写成知识、指令、程序还是模型参数。
+        </p>
+      </section>
+
+      <!-- ============ 8. 实验 2-6 ============ -->
+      <section class="note-section" id="experiment">
+        <h2>8&nbsp;&nbsp;实验 2-6 ★★：使用 Agent Skills 从论文生成演示文稿</h2>
+        <p>
+          实验目标：验证 Agent 通过动态加载专业领域 Skill 完成复杂任务的能力。
+        </p>
+        <p>
+          使用 Claude Code（或任意支持 SKILL.md 渐进式披露的等价 Agent 运行时，如 Kimi Code）+ Anthropic 官方 PPTX Skill，从一篇学术论文的 PDF 生成一份 10-15 页的演示文稿。<strong>Skill 的内容是实验对象，运行时可以替换</strong>——并非每位读者都有 Anthropic 凭证，只要运行时具备「元数据目录 + 按需加载」的 Skills 机制即可。
+        </p>
+        <h3>Agent 的执行流程体现了渐进式加载的过程</h3>
+        <ol class="steps">
+          <li>在 system prompt 的 Skill 元数据目录中看到 PPTX Skill 的描述</li>
+          <li>识别出任务需要该 Skill</li>
+          <li>调用 Skill（或读取 SKILL.md）加载完整指令，获得核心流程</li>
+          <li>选择性加载 html2pptx.md 获取详细方法</li>
+          <li>使用捆绑的工具脚本（如 scripts/thumbnail.py）生成预览，使用模板文件作为设计的起点</li>
+        </ol>
+        <div class="callout warning" aria-label="验收标准">
+          <span class="callout-title">📋 验收标准</span>
+          <p>生成的 PowerPoint 覆盖论文的主要内容（标题页、问题背景、方法概述、关键结果、结论），至少包含 3 张从论文中提取的图表且与文字说明一致，格式正确且可在 PowerPoint 或兼容软件中正常打开。</p>
+        </div>
+      </section>
+
+      <!-- ============ 参考资料 ============ -->
+      <section class="note-section" id="references">
+        <h2>参考资料</h2>
+        <div class="sources-list">
+          <ul>
+            <li>Anthropic, “Equipping Agents for the Real World with Agent Skills”, 2025</li>
+            <li>Claude Code Docs, “How Claude Code uses prompt caching”, “Invoking skills and commands”</li>
+            <li>Agent Skills, “How to add skills support to your agent”, “Where to place the catalog”</li>
+            <li>Anthropic, “PPTX Skill”, 2025. — <a href="https://github.com/anthropics/skills/" target="_blank" rel="noopener">https://github.com/anthropics/skills/</a></li>
+            <li>李博杰，《深入理解 AI Agent：设计原理与工程实践》——第 2 章 2.5 节</li>
+          </ul>
+        </div>
+        <p class="source-note">
+          说明：本页为对原书 2.5 节内容的结构化重组与学习笔记式归纳，图 2-11/2-12/2-13 的数据以文字与表格形式呈现，并非原文逐段转载。
+        </p>
+      </section>
+
+      <a href="#top" class="back-to-top">↑ 返回顶部</a>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      function copyText(btn, target) {
+        var text = target.innerText;
+        function done(ok) {
+          btn.classList.add(ok ? 'copied' : 'copy-failed');
+          btn.textContent = ok ? '已复制 ✓' : '复制失败';
+          setTimeout(function () {
+            btn.classList.remove('copied', 'copy-failed');
+            btn.textContent = '复制代码';
+          }, 1600);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+        } else {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          try { document.execCommand('copy'); done(true); }
+          catch (e) { done(false); }
+          document.body.removeChild(ta);
+        }
+      }
+      document.querySelectorAll('.copy-btn[data-copy-target]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var target = document.getElementById(btn.getAttribute('data-copy-target'));
+          if (target) copyText(btn, target);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
