@@ -1151,3 +1151,90 @@ code {
     }
 }
 
+/* =========================================================
+   现代 Agent 页面（第一章 1.1）补充样式
+   ========================================================= */
+
+/* 组件网格的列数变体：三列 / 五列 */
+.agent-system-page .component-grid.three{
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.agent-system-page .component-grid.five{
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+/* 卡片纵向布局：内容不足时整列等高、视觉更整齐 */
+.agent-system-page .component-card,
+.agent-system-page .boundary-card{
+    display: flex;
+    flex-direction: column;
+}
+
+.agent-system-page .component-card h3{
+    margin-bottom: 10px;
+}
+
+/* 有序步骤（如工具调用四步流程）：编号圆点 + 分隔线 */
+.agent-system-page .note-body ol.steps{
+    margin-bottom: 26px;
+    padding-left: 0;
+    list-style: none;
+    counter-reset: steps;
+}
+
+.agent-system-page .note-body ol.steps > li{
+    position: relative;
+    margin: 0;
+    padding: 12px 0 12px 42px;
+    border-bottom: 1px dashed var(--line);
+    counter-increment: steps;
+}
+
+.agent-system-page .note-body ol.steps > li:last-child{
+    border-bottom: 0;
+}
+
+.agent-system-page .note-body ol.steps > li::before{
+    position: absolute;
+    top: 50%;
+    left: 0;
+    display: grid;
+    width: 26px;
+    height: 26px;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent);
+    content: counter(steps);
+    font-size: 0.8rem;
+    font-weight: 800;
+    transform: translateY(-50%);
+}
+
+/* 图片题注 */
+.agent-system-page .figure-center figcaption{
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: 0.86rem;
+}
+
+/* 表格单元格内的次要英文标注（如学习机制的英文名） */
+.agent-system-page .note-table .en{
+    color: var(--muted);
+    font-weight: 400;
+}
+
+@media (max-width: 1040px){
+    .agent-system-page .component-grid.five{
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 680px){
+    .agent-system-page .component-grid.three,
+    .agent-system-page .component-grid.five{
+        grid-template-columns: 1fr;
+    }
+}
+
