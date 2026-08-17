@@ -11,7 +11,7 @@
   <div class="notes-layout">
     <aside class="notes-sidebar">
       <h1 class="notes-brand">第二章 上下文工程</h1>
-      <p class="notes-subtitle">《深入理解 AI Agent：设计原理与工程实践》读书笔记 · 2.4</p>
+      <p ></p>
       <div class="notes-home-links">
         <a href="../../notes-index.html">← Notes index</a>
         <a href="../../index.html">Home</a>
@@ -20,14 +20,14 @@
         <h2 class="notes-nav-title">Knowledge Points</h2>
         <ul>
           <li><a href="#test">1 核心对象与检验标准</a></li>
-          <li><a href="#tone">2 语气与风格（2.4.1）</a></li>
-          <li><a href="#structure">3 结构化提示（2.4.2）</a></li>
-          <li><a href="#process">4 流程驱动 vs 规则堆砌（2.4.3）</a></li>
-          <li><a href="#rules">5 业务规则细化（2.4.4）</a></li>
-          <li><a href="#fewshot">6 Few-shot 示例（2.4.5）</a></li>
-          <li><a href="#tool-def">7 工具定义的设计（2.4.6）</a></li>
+          <li><a href="#tone">2 语气与风格</a></li>
+          <li><a href="#structure">3 结构化提示</a></li>
+          <li><a href="#process">4 流程驱动 vs 规则堆砌</a></li>
+          <li><a href="#rules">5 业务规则细化</a></li>
+          <li><a href="#fewshot">6 Few-shot 示例</a></li>
+          <li><a href="#tool-def">7 工具定义的设计</a></li>
           <li><a href="#ablation">8 实验 2-4：消融实验</a></li>
-          <li><a href="#injection">9 提示注入（2.4.7）</a></li>
+          <li><a href="#injection">9 提示注入</a></li>
           <li><a href="#attack-experiment">10 实验 2-5：注入攻防</a></li>
           <li><a href="#references">参考资料</a></li>
         </ul>
@@ -36,7 +36,6 @@
 
     <main class="notes-content note-body">
       <p class="note-meta">更新于 2026 年 8 月</p>
-      <h1>2.4　提示工程——优化系统提示词</h1>
       <p class="note-lead">
         提示工程（Prompt Engineering）的核心对象是系统提示词（System Prompt）——API 消息列表中那条 <code>role: "system"</code> 的消息。<strong>它是 Agent 的“员工手册”</strong>，定义了 Agent 的身份、行为规则、约束条件和工作流程。一个精心设计的系统提示词，能让模型在具体任务中充分发挥其通用能力。本节从语气、结构、组织方式、内容、示例、工具定义六个维度展开，最后落到提示注入这一上下文安全的核心威胁。
       </p>
@@ -55,7 +54,7 @@
 
       <!-- ============ 2. 语气与风格 ============ -->
       <section class="note-section" id="tone">
-        <h2>2&nbsp;&nbsp;语气与风格：系统提示词的“人格”（2.4.1）</h2>
+        <h2>2&nbsp;&nbsp;语气与风格：系统提示词的“人格”</h2>
         <p>
           语气和风格的设计是提示工程中最容易被忽视，却又深刻影响用户体验的部分。例如“You MUST answer concisely with fewer than 4 lines”（你必须简洁地回答，不超过 4 行）。在无法完成任务时要求“keep your response to 1-2 sentences”（把回复控制在 1-2 句话），并且“不要解释为什么不能做某事”——<strong>这种设计避免了 Agent 陷入冗长的自我辩护</strong>。
         </p>
@@ -67,7 +66,7 @@
 
       <!-- ============ 3. 结构化提示 ============ -->
       <section class="note-section" id="structure">
-        <h2>3&nbsp;&nbsp;结构化提示：系统提示词的“格式”（2.4.2）</h2>
+        <h2>3&nbsp;&nbsp;结构化提示：系统提示词的“格式”</h2>
         <p>
           现代大语言模型对结构化输入展现出显著的敏感性，这源于训练数据中包含大量的结构化内容。XML 标签的使用遵循层次化原则，<strong>其标签名称本身就携带语义信息</strong>——<code>&lt;working_directory&gt;</code> 能立即告诉模型这是工作目录信息，而纯文本格式“当前目录：/Users/project/src”则需要模型做额外的思考来理解冒号前后的关系。
         </p>
@@ -138,7 +137,7 @@ Step 5: Verification
 
       <!-- ============ 5. 业务规则细化 ============ -->
       <section class="note-section" id="rules">
-        <h2>5&nbsp;&nbsp;业务规则细化：系统提示词的“内容”（2.4.4）</h2>
+        <h2>5&nbsp;&nbsp;业务规则细化：系统提示词的“内容”</h2>
         <p>
           在构建生产级的 Agent 系统时，最容易被忽视却最为关键的环节是<strong>业务规则的细化</strong>。这不是技术问题，而是产品设计问题，需要产品经理的深度参与。
         </p>
@@ -185,7 +184,7 @@ Step 5: Verification
 
       <!-- ============ 6. Few-shot ============ -->
       <section class="note-section" id="fewshot">
-        <h2>6&nbsp;&nbsp;Few-shot 示例：何时给模型看例子（2.4.5）</h2>
+        <h2>6&nbsp;&nbsp;Few-shot 示例：何时给模型看例子</h2>
         <p>
           除了规则和流程，示例（few-shot examples）是系统提示词中另一类重要内容。当期望的输出难以用规则精确描述时——比如特定风格的文案、结构化报告的格式、客服回复的语气分寸——<strong>与其堆砌冗长的文字定义，不如直接给出两三个高质量的输入-输出示例</strong>。模型的上下文学习能力会从示例中“临时学会”这些模式，其效果往往胜过等量篇幅的抽象规则。反过来，对于模型本来就擅长、规则又容易说清的任务，示例只是浪费 token。
         </p>
@@ -226,7 +225,7 @@ Step 5: Verification
 
       <!-- ============ 7. 工具定义 ============ -->
       <section class="note-section" id="tool-def">
-        <h2>7&nbsp;&nbsp;工具定义的设计（2.4.6）</h2>
+        <h2>7&nbsp;&nbsp;工具定义的设计</h2>
         <p>
           除了系统提示词，API 请求中另一个重要的静态组成部分是<strong>工具定义（tools 字段）</strong>。工具定义的质量直接决定了 Agent 使用工具的准确性——可以把它看作给新员工的操作手册，好的描述能让从未使用过该工具的人立即正确使用，并避免常见的错误。
         </p>
@@ -309,7 +308,7 @@ Step 5: Verification
 
       <!-- ============ 9. 提示注入 ============ -->
       <section class="note-section" id="injection">
-        <h2>9&nbsp;&nbsp;提示注入：上下文安全的核心威胁（2.4.7）</h2>
+        <h2>9&nbsp;&nbsp;提示注入：上下文安全的核心威胁</h2>
         <p>
           系统提示词和工具定义的设计方法讨论完毕，本节最后还需要考虑一个安全维度：如何防止精心设计的上下文被外部输入劫持？这就是<strong>提示注入问题</strong>。
         </p>
@@ -410,49 +409,12 @@ Step 5: Verification
             <li>OpenAI, “Tool search”, Responses API 文档. — <a href="https://developers.openai.com/api/docs/guides/tools-tool-search" target="_blank" rel="noopener">https://developers.openai.com/api/docs/guides/tools-tool-search</a></li>
             <li>Anthropic, “Scale with MCP tool search”, Claude Code 文档. — <a href="https://code.claude.com/docs/en/mcp" target="_blank" rel="noopener">https://code.claude.com/docs/en/mcp</a></li>
             <li>OpenAI Codex CLI 源码 —— core/templates/search_tool/tool_description.md</li>
-            <li>李博杰，《深入理解 AI Agent：设计原理与工程实践》——第 2 章 2.4 节</li>
           </ul>
         </div>
-        <p class="source-note">
-          说明：本页为对原书 2.4 节内容的结构化重组与学习笔记式归纳，SOP 示例、计费模式示例与表述为笔记式总结，并非原文逐段转载。
-        </p>
       </section>
 
       <a href="#top" class="back-to-top">↑ 返回顶部</a>
     </main>
   </div>
-
-  <script>
-    (function () {
-      function copyText(btn, target) {
-        var text = target.innerText;
-        function done(ok) {
-          btn.classList.add(ok ? 'copied' : 'copy-failed');
-          btn.textContent = ok ? '已复制 ✓' : '复制失败';
-          setTimeout(function () {
-            btn.classList.remove('copied', 'copy-failed');
-            btn.textContent = '复制代码';
-          }, 1600);
-        }
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
-        } else {
-          var ta = document.createElement('textarea');
-          ta.value = text;
-          document.body.appendChild(ta);
-          ta.select();
-          try { document.execCommand('copy'); done(true); }
-          catch (e) { done(false); }
-          document.body.removeChild(ta);
-        }
-      }
-      document.querySelectorAll('.copy-btn[data-copy-target]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          var target = document.getElementById(btn.getAttribute('data-copy-target'));
-          if (target) copyText(btn, target);
-        });
-      });
-    })();
-  </script>
 </body>
 </html>

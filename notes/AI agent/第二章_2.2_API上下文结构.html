@@ -1,134 +1,142 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>第二章 · 2.2 Agent 如何调用大模型——理解 API 的上下文结构</title>
-  <link rel="stylesheet" href="style.css">
-  <link rel="icon" href="../../image/favicon.jpg" type="image/x-icon">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第二章 · 2.2 Agent 如何调用大模型——理解 API 的上下文结构</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="../../image/favicon.jpg" type="image/x-icon">
 </head>
 <body class="notes-page agent-system-page" id="top">
-  <div class="notes-layout">
+<div class="notes-layout">
     <aside class="notes-sidebar">
-      <h1 class="notes-brand">第二章 上下文工程</h1>
-      <p class="notes-subtitle">《深入理解 AI Agent：设计原理与工程实践》读书笔记 · 2.2</p>
-      <div class="notes-home-links">
-        <a href="../../notes-index.html">← Notes index</a>
-        <a href="../../index.html">Home</a>
-      </div>
-      <nav class="notes-nav" aria-label="API 上下文结构知识点">
-        <h2 class="notes-nav-title">Knowledge Points</h2>
-        <ul>
-          <li><a href="#four-roles">1 消息的四种角色（2.2.1）</a></li>
-          <li><a href="#single-turn">2 单轮对话（2.2.2）</a></li>
-          <li><a href="#tool-loop">3 工具调用核心循环（2.2.3）</a></li>
-          <li><a href="#code-loop">4 用代码实现核心循环（2.2.4）</a></li>
-          <li><a href="#api-perspective">5 从 API 视角看上下文构成（2.2.5）</a></li>
-          <li><a href="#experiment">6 实验 2-1：本地 LLM</a></li>
-          <li><a href="#references">参考资料</a></li>
-        </ul>
-      </nav>
+        <h1 class="notes-brand">第二章 上下文工程</h1>
+        <p></p>
+        <div class="notes-home-links">
+            <a href="../../notes-index.html">← Notes index</a>
+            <a href="../../index.html">Home</a>
+        </div>
+        <nav class="notes-nav" aria-label="API 上下文结构知识点">
+            <h2 class="notes-nav-title">Knowledge Points</h2>
+            <ul>
+                <li><a href="#four-roles">1 消息的四种角色</a></li>
+                <li><a href="#single-turn">2 单轮对话</a></li>
+                <li><a href="#tool-loop">3 工具调用核心循环</a></li>
+                <li><a href="#code-loop">4 用代码实现核心循环</a></li>
+                <li><a href="#api-perspective">5 从 API 视角看上下文构成</a></li>
+                <li><a href="#experiment">6 实验 2-1：本地 LLM</a></li>
+                <li><a href="#references">参考资料</a></li>
+            </ul>
+        </nav>
     </aside>
 
     <main class="notes-content note-body">
-      <p class="note-meta">更新于 2026 年 8 月</p>
-      <h1>2.2　Agent 如何调用大模型——理解 API 的上下文结构</h1>
-      <p class="note-lead">
-        本节以 OpenAI 的 Chat Completions API 为例（Anthropic、Google 等厂商的 API 结构大同小异），详细拆解 Agent 每次调用大模型时的<strong>完整请求构成</strong>。从消息的四种角色，到单轮对话，再到带工具调用的多轮交互核心循环，最后落到“静态前缀 + 轨迹”的上下文模型。<strong>理解这个结构，是掌握后续所有上下文工程技术的基础。</strong>
-      </p>
-
-      <!-- ============ 1. 四种角色 ============ -->
-      <section class="note-section" id="four-roles">
-        <h2>1&nbsp;&nbsp;消息的四种角色（2.2.1）</h2>
-        <p>
-          大模型 API 的核心是一个<strong>消息列表（messages）</strong>，列表中的每条消息都有一个角色（role）标识，模型根据角色来理解每条消息的含义和来源：
+        <p class="note-meta">更新于 2026 年 8 月</p>
+        <p class="note-lead">
+            本节以 OpenAI 的 Chat Completions API 为例（Anthropic、Google 等厂商的 API 结构大同小异），详细拆解 Agent
+            每次调用大模型时的<strong>完整请求构成</strong>。从消息的四种角色，到单轮对话，再到带工具调用的多轮交互核心循环，最后落到“静态前缀
+            + 轨迹”的上下文模型。<strong>理解这个结构，是掌握后续所有上下文工程技术的基础。</strong>
         </p>
-        <div class="component-grid" aria-label="四种消息角色">
-          <article class="component-card core">
-            <span class="index">system · 系统提示词</span>
-            <h3>最高优先级的指令</h3>
-            <p>由开发者编写，定义 Agent 的身份、行为规则、约束条件。模型将其视为最高优先级的指令。</p>
-            <p><strong>整个对话过程中通常只有一条，放在消息列表的最前面。</strong></p>
-          </article>
-          <article class="component-card">
-            <span class="index">user · 用户消息</span>
-            <h3>来自终端用户的输入</h3>
-            <p>是 Agent 需要响应的请求。</p>
-          </article>
-          <article class="component-card">
-            <span class="index">assistant · 助手消息</span>
-            <h3>模型之前的回复</h3>
-            <p>包括文本回复和工具调用请求。在多轮对话中，之前的 assistant 消息会被放回消息列表，让模型“记住”自己说过什么。</p>
-          </article>
-          <article class="component-card">
-            <span class="index">tool · 工具结果</span>
-            <h3>Agent 框架执行工具后送回</h3>
-            <p>每条 tool 消息通过 <code>tool_call_id</code> 与对应的工具调用请求关联。</p>
-          </article>
-        </div>
 
-        <div class="callout warning" aria-label="tools 是独立字段">
-          <span class="callout-title">🧰 别忘了：tools 字段不是消息角色</span>
-          <p><strong>工具定义（tools）作为请求的独立字段（而非消息）</strong>，告诉模型有哪些工具可以使用、每个工具接受什么参数。</p>
-        </div>
+        <!-- ============ 1. 四种角色 ============ -->
+        <section class="note-section" id="four-roles">
+            <h2>1&nbsp;&nbsp;消息的四种角色</h2>
+            <p>
+                大模型 API 的核心是一个<strong>消息列表（messages）</strong>，列表中的每条消息都有一个角色（role）标识，模型根据角色来理解每条消息的含义和来源：
+            </p>
+            <div class="component-grid" aria-label="四种消息角色">
+                <article class="component-card core">
+                    <span class="index">system · 系统提示词</span>
+                    <h3>最高优先级的指令</h3>
+                    <p>由开发者编写，定义 Agent 的身份、行为规则、约束条件。模型将其视为最高优先级的指令。</p>
+                    <p><strong>整个对话过程中通常只有一条，放在消息列表的最前面。</strong></p>
+                </article>
+                <article class="component-card">
+                    <span class="index">user · 用户消息</span>
+                    <h3>来自终端用户的输入</h3>
+                    <p>是 Agent 需要响应的请求。</p>
+                </article>
+                <article class="component-card">
+                    <span class="index">assistant · 助手消息</span>
+                    <h3>模型之前的回复</h3>
+                    <p>包括文本回复和工具调用请求。在多轮对话中，之前的 assistant
+                        消息会被放回消息列表，让模型“记住”自己说过什么。</p>
+                </article>
+                <article class="component-card">
+                    <span class="index">tool · 工具结果</span>
+                    <h3>Agent 框架执行工具后送回</h3>
+                    <p>每条 tool 消息通过 <code>tool_call_id</code> 与对应的工具调用请求关联。</p>
+                </article>
+            </div>
 
-        <h3>与第一章“上下文五个组成部分”的对应关系</h3>
-        <div class="table-wrap">
-          <table class="note-table">
-            <thead>
-              <tr>
-                <th>API 角色 / 字段</th>
-                <th>第一章的组成部分</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><code>system</code></td>
-                <td>系统提示词</td>
-              </tr>
-              <tr>
-                <td><code>user</code></td>
-                <td>用户消息</td>
-              </tr>
-              <tr>
-                <td><code>assistant</code></td>
-                <td>模型回复</td>
-              </tr>
-              <tr>
-                <td><code>tool</code></td>
-                <td>工具执行结果</td>
-              </tr>
-              <tr>
-                <td><code>tools</code>（请求顶层字段）</td>
-                <td>工具定义</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p>
-          <strong>“四种消息角色 + tools 字段”恰好覆盖第一章所说的五个上下文组成部分。</strong>
-        </p>
-      </section>
+            <div class="callout warning" aria-label="tools 是独立字段">
+                <span class="callout-title">🧰 别忘了：tools 字段不是消息角色</span>
+                <p><strong>工具定义（tools）作为请求的独立字段（而非消息）</strong>，告诉模型有哪些工具可以使用、每个工具接受什么参数。
+                </p>
+            </div>
 
-      <!-- ============ 2. 单轮对话 ============ -->
-      <section class="note-section" id="single-turn">
-        <h2>2&nbsp;&nbsp;单轮对话：最简单的 API 调用（2.2.2）</h2>
-        <p>
-          先看一个不涉及工具调用的最简单场景——用户问“Hello, who are you?”。这里用本地部署的 <strong>Qwen3-0.6B</strong> 小模型作为示例：
-        </p>
-        <details class="code-example">
-          <summary>
+            <h3>与第一章“上下文五个组成部分”的对应关系</h3>
+            <div class="table-wrap">
+                <table class="note-table">
+                    <thead>
+                    <tr>
+                        <th>API 角色 / 字段</th>
+                        <th>第一章的组成部分</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td><code>system</code></td>
+                        <td>系统提示词</td>
+                    </tr>
+                    <tr>
+                        <td><code>user</code></td>
+                        <td>用户消息</td>
+                    </tr>
+                    <tr>
+                        <td><code>assistant</code></td>
+                        <td>模型回复</td>
+                    </tr>
+                    <tr>
+                        <td><code>tool</code></td>
+                        <td>工具执行结果</td>
+                    </tr>
+                    <tr>
+                        <td><code>tools</code>（请求顶层字段）</td>
+                        <td>工具定义</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p>
+                <strong>“四种消息角色 + tools 字段”恰好覆盖第一章所说的五个上下文组成部分。</strong>
+            </p>
+        </section>
+
+        <!-- ============ 2. 单轮对话 ============ -->
+        <section class="note-section" id="single-turn">
+            <h2>2&nbsp;&nbsp;单轮对话：最简单的 API 调用</h2>
+            <figure class="figure-center">
+                <img src="images/第二章·1.2.png" width="800">
+                <figcaption>图 1：单轮 API 调用的请求与响应结构</figcaption>
+            </figure>
+            <p>
+                先看一个不涉及工具调用的最简单场景——用户问“Hello, who are you?”。这里用本地部署的
+                <strong>Qwen3-0.6B</strong> 小模型作为示例：
+            </p>
+            <details class="code-example">
+                <summary>
             <span class="code-summary-main">
               <span class="code-lang">json</span>
               <strong class="code-file">single_turn.json</strong>
               <span class="code-caption">单轮对话的请求与响应 · 展开查看</span>
             </span>
-            <span class="code-actions">
+                    <span class="code-actions">
               <button type="button" class="copy-btn" data-copy-target="single-turn-source">复制代码</button>
               <span class="code-chevron">⌄</span>
             </span>
-          </summary>
-          <div class="code-panel">
+                </summary>
+                <div class="code-panel">
             <pre><code id="single-turn-source" class="language-json">
 // ═══ Request constructed by the Agent framework ═══
 {
@@ -156,67 +164,77 @@
     }]
 }
 </code></pre>
-          </div>
-        </details>
+                </div>
+            </details>
 
-        <div class="definition-box" aria-label="单轮模式">
-          <span class="definition-label">最基本的交互模式</span>
-          <p class="definition-sentence">
-            这个请求只包含两条消息：一条 system（开发者写的规则）和一条 user（用户的输入）。模型返回一条 assistant 消息作为回复。这就是大模型 API 最基本的交互模式——<strong>每次调用都是无状态的，所有模型需要的信息必须在请求的消息列表中完整提供</strong>。
-          </p>
-        </div>
-      </section>
-
-      <!-- ============ 3. 工具调用核心循环 ============ -->
-      <section class="note-section" id="tool-loop">
-        <h2>3&nbsp;&nbsp;带工具调用的多轮交互：Agent 的核心循环（2.2.3）</h2>
-        <p>
-          真正的 Agent 场景远比单轮问答复杂。当用户问“What’s the current time and weather in Vancouver?”时，模型无法凭自身知识回答（它不知道“现在”是什么时候，更不知道天气），需要调用外部工具。下面完整展示这个过程中 Agent 框架与模型之间的每一步交互。
-        </p>
-
-        <h3>两次模型 API 调用的完整交互序列</h3>
-        <div class="lifecycle-flow" aria-label="工具调用循环">
-          <div class="phase">
-            <div class="phase-label">第 1 次模型调用<span>API · messages: system + user</span></div>
-            <div class="phase-content">
-              <p>模型返回两个<strong>工具调用请求</strong>：<code>get_current_time(timezone="America/Vancouver")</code> 与 <code>get_weather(city="Vancouver", unit="celsius")</code>。</p>
-              <p>两者无数据依赖 → <strong>Agent 框架可并行执行</strong>。</p>
+            <div class="definition-box" aria-label="单轮模式">
+                <span class="definition-label">最基本的交互模式</span>
+                <p class="definition-sentence">
+                    这个请求只包含两条消息：一条 system（开发者写的规则）和一条 user（用户的输入）。模型返回一条 assistant
+                    消息作为回复。这就是大模型 API
+                    最基本的交互模式——<strong>每次调用都是无状态的，所有模型需要的信息必须在请求的消息列表中完整提供</strong>。
+                </p>
             </div>
-          </div>
-          <div class="phase">
-            <div class="phase-label">Agent 框架执行工具<span>两个工具并行运行</span></div>
-            <div class="phase-content">
-              <p>调用时间 API 与天气 API，得到实际结果。</p>
-            </div>
-          </div>
-          <div class="phase">
-            <div class="phase-label">第 2 次模型调用<span>messages: + tool 结果</span></div>
-            <div class="phase-content">
-              <p>把 tool 结果追加到消息历史，再次请求模型。</p>
-              <p>模型返回<strong>最终回复</strong>（无工具调用）→ 循环结束。</p>
-            </div>
-          </div>
-        </div>
+        </section>
 
-        <div class="callout warning" aria-label="调用对象">
-          <span class="callout-title">🔄 两次调用，都指模型 API 而非两个工具</span>
-          <p>图中的两次调用均指<strong>调用模型 API</strong>，而不是先后调用两个工具。本例中 get_current_time 的时区参数和 get_weather 的城市、单位参数都可以直接确定；天气服务会自行返回该城市的最新天气，不依赖时间工具的输出，因此可以并行执行。<strong>如果后一个工具的参数必须来自前一个工具的结果，模型就需要在后续一轮中再发起工具调用，两个工具只能串行执行。</strong></p>
-        </div>
+        <!-- ============ 3. 工具调用核心循环 ============ -->
+        <section class="note-section" id="tool-loop">
+            <h2>3&nbsp;&nbsp;带工具调用的多轮交互：Agent 的核心循环</h2>
+            <p>
+                真正的 Agent 场景远比单轮问答复杂。当用户问“What’s the current time and weather in
+                Vancouver?”时，模型无法凭自身知识回答（它不知道“现在”是什么时候，更不知道天气），需要调用外部工具。下面完整展示这个过程中
+                Agent 框架与模型之间的每一步交互。
+            </p>
+            <figure class="figure-center">
+                <img src="images/第二章·1.3.png" width="800">
+                <figcaption>图 2：两次模型 API 调用的完整交互序列</figcaption>
+            </figure>
+            <h3>两次模型 API 调用的完整交互序列</h3>
+            <div class="lifecycle-flow" aria-label="工具调用循环">
+                <div class="phase">
+                    <div class="phase-label">第 1 次模型调用<span>API · messages: system + user</span></div>
+                    <div class="phase-content">
+                        <p>模型返回两个<strong>工具调用请求</strong>：<code>get_current_time(timezone="America/Vancouver")</code>
+                            与 <code>get_weather(city="Vancouver", unit="celsius")</code>。</p>
+                        <p>两者无数据依赖 → <strong>Agent 框架可并行执行</strong>。</p>
+                    </div>
+                </div>
+                <div class="phase">
+                    <div class="phase-label">Agent 框架执行工具<span>两个工具并行运行</span></div>
+                    <div class="phase-content">
+                        <p>调用时间 API 与天气 API，得到实际结果。</p>
+                    </div>
+                </div>
+                <div class="phase">
+                    <div class="phase-label">第 2 次模型调用<span>messages: + tool 结果</span></div>
+                    <div class="phase-content">
+                        <p>把 tool 结果追加到消息历史，再次请求模型。</p>
+                        <p>模型返回<strong>最终回复</strong>（无工具调用）→ 循环结束。</p>
+                    </div>
+                </div>
+            </div>
 
-        <h3>第一次 API 调用——Agent 框架发送初始请求</h3>
-        <details class="code-example">
-          <summary>
+            <div class="callout warning" aria-label="调用对象">
+                <span class="callout-title">🔄 两次调用，都指模型 API 而非两个工具</span>
+                <p>图中的两次调用均指<strong>调用模型 API</strong>，而不是先后调用两个工具。本例中 get_current_time 的时区参数和
+                    get_weather 的城市、单位参数都可以直接确定；天气服务会自行返回该城市的最新天气，不依赖时间工具的输出，因此可以并行执行。<strong>如果后一个工具的参数必须来自前一个工具的结果，模型就需要在后续一轮中再发起工具调用，两个工具只能串行执行。</strong>
+                </p>
+            </div>
+
+            <h3>第一次 API 调用——Agent 框架发送初始请求</h3>
+            <details class="code-example">
+                <summary>
             <span class="code-summary-main">
               <span class="code-lang">json</span>
               <strong class="code-file">call_1_request.json</strong>
               <span class="code-caption">第 1 次调用：初始请求 · 展开查看</span>
             </span>
-            <span class="code-actions">
+                    <span class="code-actions">
               <button type="button" class="copy-btn" data-copy-target="call1-request-source">复制代码</button>
               <span class="code-chevron">⌄</span>
             </span>
-          </summary>
-          <div class="code-panel">
+                </summary>
+                <div class="code-panel">
             <pre><code id="call1-request-source" class="language-json">
 // ═══ Request constructed by the Agent framework (1st call) ═══
 {
@@ -264,23 +282,23 @@
     ]
 }
 </code></pre>
-          </div>
-        </details>
+                </div>
+            </details>
 
-        <h3>模型返回工具调用请求（不是最终回复）</h3>
-        <details class="code-example">
-          <summary>
+            <h3>模型返回工具调用请求（不是最终回复）</h3>
+            <details class="code-example">
+                <summary>
             <span class="code-summary-main">
               <span class="code-lang">json</span>
               <strong class="code-file">call_1_response.json</strong>
               <span class="code-caption">模型决定调用工具 · 展开查看</span>
             </span>
-            <span class="code-actions">
+                    <span class="code-actions">
               <button type="button" class="copy-btn" data-copy-target="call1-response-source">复制代码</button>
               <span class="code-chevron">⌄</span>
             </span>
-          </summary>
-          <div class="code-panel">
+                </summary>
+                <div class="code-panel">
             <pre><code id="call1-response-source" class="language-json">
 // ═══ Response returned by the API (model decides to call tools) ═══
 {
@@ -310,28 +328,30 @@
     }]
 }
 </code></pre>
-          </div>
-        </details>
+                </div>
+            </details>
 
-        <div class="callout success" aria-label="决策与执行分离">
-          <span class="callout-title">🔑 理解 Agent 架构的关键：决策与执行分离</span>
-          <p>模型并没有直接回答用户的问题，而是返回了两个工具调用请求——它判断“当前时间”和“天气”需要通过工具获取，而且两者之间没有依赖关系，可以并行调用。<strong>模型只是发出了调用请求，真正执行工具的是 Agent 框架。模型负责决策（调用什么工具、传什么参数），Agent 框架负责执行（实际调用 API、运行代码）。</strong></p>
-        </div>
+            <div class="callout success" aria-label="决策与执行分离">
+                <span class="callout-title">🔑 理解 Agent 架构的关键：决策与执行分离</span>
+                <p>模型并没有直接回答用户的问题，而是返回了两个工具调用请求——它判断“当前时间”和“天气”需要通过工具获取，而且两者之间没有依赖关系，可以并行调用。<strong>模型只是发出了调用请求，真正执行工具的是
+                    Agent 框架。模型负责决策（调用什么工具、传什么参数），Agent 框架负责执行（实际调用 API、运行代码）。</strong>
+                </p>
+            </div>
 
-        <h3>Agent 框架执行工具，然后发起第二次 API 调用</h3>
-        <details class="code-example">
-          <summary>
+            <h3>Agent 框架执行工具，然后发起第二次 API 调用</h3>
+            <details class="code-example">
+                <summary>
             <span class="code-summary-main">
               <span class="code-lang">json</span>
               <strong class="code-file">call_2_request.json</strong>
               <span class="code-caption">第 2 次调用：完整历史 + 工具结果 · 展开查看</span>
             </span>
-            <span class="code-actions">
+                    <span class="code-actions">
               <button type="button" class="copy-btn" data-copy-target="call2-request-source">复制代码</button>
               <span class="code-chevron">⌄</span>
             </span>
-          </summary>
-          <div class="code-panel">
+                </summary>
+                <div class="code-panel">
             <pre><code id="call2-request-source" class="language-json">
 // ═══ Request constructed by the Agent framework (2nd call) ═══
 {
@@ -374,30 +394,35 @@
     "tools": [ ... ]                                       // ← Same tool definitions as above,
 }                                                          //   omitted
 </code></pre>
-          </div>
-        </details>
+                </div>
+            </details>
 
-        <h3>三个关键细节</h3>
-        <ul class="checklist" aria-label="工具循环三个关键细节">
-          <li><strong>完整历史回传</strong>：第二次请求包含第一次的全部对话历史——system 消息、user 消息、第一次的 assistant 回复（含工具调用）以及新增的 tool 结果。模型不会“记住”上一次的对话，Agent 框架必须每次都把完整历史送回去。</li>
-          <li><strong>assistant 消息原样放回</strong>：第一次的 assistant 消息被原样放回消息列表——这让模型能“看到”自己之前做了什么决策。</li>
-          <li><strong>tool_call_id 关联</strong>：tool 消息通过 <code>tool_call_id</code> 与对应的工具调用关联——模型据此知道哪个结果对应哪个调用。</li>
-        </ul>
+            <h3>三个关键细节</h3>
+            <ul class="checklist" aria-label="工具循环三个关键细节">
+                <li><strong>完整历史回传</strong>：第二次请求包含第一次的全部对话历史——system 消息、user 消息、第一次的
+                    assistant 回复（含工具调用）以及新增的 tool 结果。模型不会“记住”上一次的对话，Agent 框架必须每次都把完整历史送回去。
+                </li>
+                <li><strong>assistant 消息原样放回</strong>：第一次的 assistant 消息被原样放回消息列表——这让模型能“看到”自己之前做了什么决策。
+                </li>
+                <li><strong>tool_call_id 关联</strong>：tool 消息通过 <code>tool_call_id</code>
+                    与对应的工具调用关联——模型据此知道哪个结果对应哪个调用。
+                </li>
+            </ul>
 
-        <h3>模型根据工具结果生成最终回复</h3>
-        <details class="code-example">
-          <summary>
+            <h3>模型根据工具结果生成最终回复</h3>
+            <details class="code-example">
+                <summary>
             <span class="code-summary-main">
               <span class="code-lang">json</span>
               <strong class="code-file">call_2_response.json</strong>
               <span class="code-caption">最终回复 · 展开查看</span>
             </span>
-            <span class="code-actions">
+                    <span class="code-actions">
               <button type="button" class="copy-btn" data-copy-target="call2-response-source">复制代码</button>
               <span class="code-chevron">⌄</span>
             </span>
-          </summary>
-          <div class="code-panel">
+                </summary>
+                <div class="code-panel">
             <pre><code id="call2-response-source" class="language-json">
 // ═══ Response returned by the API (final reply) ═══
 {
@@ -411,39 +436,43 @@
     }]
 }
 </code></pre>
-          </div>
-        </details>
+                </div>
+            </details>
 
-        <div class="definition-box" aria-label="核心循环定义">
-          <span class="definition-label">Agent 的核心循环</span>
-          <p class="definition-sentence">
-            这一次模型没有返回 tool_calls，而是直接给出了文本回复——它判断已经有了足够的信息来回答用户的问题，agent 就停止执行了。这个<strong>“请求 → 工具调用 → 执行 → 送回结果 → 再请求”</strong>的循环，就是第一章介绍的 ReAct 循环在 API 层面的具体实现。
-          </p>
-        </div>
-        <p>
-          如果用户认为还需要更多信息（比如追问“那东京呢？”），Agent 框架会把用户的追问追加到对话历史的末尾，然后发起又一次模型 API 调用。模型会再次开始返回 tool_calls，Agent 框架再执行、再送回结果，如此循环。
-        </p>
-      </section>
+            <div class="definition-box" aria-label="核心循环定义">
+                <span class="definition-label">Agent 的核心循环</span>
+                <p class="definition-sentence">
+                    这一次模型没有返回 tool_calls，而是直接给出了文本回复——它判断已经有了足够的信息来回答用户的问题，agent
+                    就停止执行了。这个<strong>“请求 → 工具调用 → 执行 → 送回结果 → 再请求”</strong>的循环，就是第一章介绍的
+                    ReAct 循环在 API 层面的具体实现。
+                </p>
+            </div>
+            <p>
+                如果用户认为还需要更多信息（比如追问“那东京呢？”），Agent 框架会把用户的追问追加到对话历史的末尾，然后发起又一次模型
+                API 调用。模型会再次开始返回 tool_calls，Agent 框架再执行、再送回结果，如此循环。
+            </p>
+        </section>
 
-      <!-- ============ 4. 代码实现核心循环 ============ -->
-      <section class="note-section" id="code-loop">
-        <h2>4&nbsp;&nbsp;用代码实现 Agent 的核心循环（2.2.4）</h2>
-        <p>
-          理解了 JSON 结构之后，让我们用 Python 代码把上面的交互过程串起来。以下是一个最简的 Agent 实现——<strong>核心就是一个 while 循环</strong>：
-        </p>
-        <details class="code-example">
-          <summary>
+        <!-- ============ 4. 代码实现核心循环 ============ -->
+        <section class="note-section" id="code-loop">
+            <h2>4&nbsp;&nbsp;用代码实现 Agent 的核心循环</h2>
+            <p>
+                理解了 JSON 结构之后，让我们用 Python 代码把上面的交互过程串起来。以下是一个最简的 Agent 实现——<strong>核心就是一个
+                while 循环</strong>：
+            </p>
+            <details class="code-example">
+                <summary>
             <span class="code-summary-main">
               <span class="code-lang">python</span>
               <strong class="code-file">agent_loop.py</strong>
               <span class="code-caption">最简 Agent 核心循环 · 展开查看</span>
             </span>
-            <span class="code-actions">
+                    <span class="code-actions">
               <button type="button" class="copy-btn" data-copy-target="agent-loop-source">复制代码</button>
               <span class="code-chevron">⌄</span>
             </span>
-          </summary>
-          <div class="code-panel">
+                </summary>
+                <div class="code-panel">
             <pre><code id="agent-loop-source" class="language-python">
 from openai import OpenAI
 
@@ -524,30 +553,31 @@ while True:
         })
     # Return to top of loop, call model again with updated message list
 </code></pre>
-          </div>
-        </details>
+                </div>
+            </details>
 
-        <div class="definition-box" aria-label="代码核心逻辑">
-          <span class="definition-label">代码的核心逻辑</span>
-          <p class="definition-sentence">
-            只有一个 while 循环和一个判断：模型返回了 tool_calls 就执行工具并继续循环，没有就输出结果并退出。整个过程中，<strong>messages 列表不断增长</strong>——每一轮都会追加模型的回复和工具的执行结果。
-          </p>
-        </div>
+            <div class="definition-box" aria-label="代码核心逻辑">
+                <span class="definition-label">代码的核心逻辑</span>
+                <p class="definition-sentence">
+                    只有一个 while 循环和一个判断：模型返回了 tool_calls 就执行工具并继续循环，没有就输出结果并退出。整个过程中，<strong>messages
+                    列表不断增长</strong>——每一轮都会追加模型的回复和工具的执行结果。
+                </p>
+            </div>
 
-        <h3>跟踪 messages 列表在每一轮的变化</h3>
-        <div class="lifecycle-flow" aria-label="messages 列表演化">
-          <div class="phase">
-            <div class="phase-label">初始状态<span>第 1 次调用前</span></div>
-            <div class="phase-content">
+            <h3>跟踪 messages 列表在每一轮的变化</h3>
+            <div class="lifecycle-flow" aria-label="messages 列表演化">
+                <div class="phase">
+                    <div class="phase-label">初始状态<span>第 1 次调用前</span></div>
+                    <div class="phase-content">
               <pre><code>messages = [
     { role: "system",     content: "You are a helpful assistant..." },   # 开发者写的
     { role: "user",       content: "What's the current time..." },       # 用户输入
 ]</code></pre>
-            </div>
-          </div>
-          <div class="phase">
-            <div class="phase-label">第 1 次调用后<span>模型返回工具调用</span></div>
-            <div class="phase-content">
+                    </div>
+                </div>
+                <div class="phase">
+                    <div class="phase-label">第 1 次调用后<span>模型返回工具调用</span></div>
+                    <div class="phase-content">
               <pre><code>messages = [
     { role: "system",   content: "..." },
     { role: "user",     content: "What's the current time..." },
@@ -555,11 +585,11 @@ while True:
     { role: "tool",     tool_call_id: "call_abc", content: "{time...}" },# + Executed by framework
     { role: "tool",     tool_call_id: "call_def", content: "{weather...}"},# + Executed by framework
 ]</code></pre>
-            </div>
-          </div>
-          <div class="phase">
-            <div class="phase-label">第 2 次调用后<span>模型返回最终回复，循环结束</span></div>
-            <div class="phase-content">
+                    </div>
+                </div>
+                <div class="phase">
+                    <div class="phase-label">第 2 次调用后<span>模型返回最终回复，循环结束</span></div>
+                    <div class="phase-content">
               <pre><code>messages = [
     { role: "system",   content: "..." },
     { role: "user",     content: "What's the current time..." },
@@ -568,149 +598,176 @@ while True:
     { role: "tool",     tool_call_id: "call_def", content: "{weather...}" },
     { role: "assistant", content: "It's currently Saturday, Sep 13, 2025 in Vancouver..." },
 ]                                                             # + Final reply</code></pre>
+                    </div>
+                </div>
             </div>
-          </div>
-        </div>
 
-        <div class="callout success" aria-label="框架的本质工作">
-          <span class="callout-title">🎯 从这个过程可以清楚地看到</span>
-          <p>Agent 框架的核心工作就是<strong>管理这个 messages 列表</strong>——在合适的时机往里追加消息，然后把整个列表送给模型。<strong>本章后续所有的上下文工程技术，本质上都是在优化这个列表的内容和结构。</strong></p>
-        </div>
-      </section>
+            <div class="callout success" aria-label="框架的本质工作">
+                <span class="callout-title">🎯 从这个过程可以清楚地看到</span>
+                <p>Agent 框架的核心工作就是<strong>管理这个 messages 列表</strong>——在合适的时机往里追加消息，然后把整个列表送给模型。<strong>本章后续所有的上下文工程技术，本质上都是在优化这个列表的内容和结构。</strong>
+                </p>
+            </div>
+        </section>
 
-      <!-- ============ 5. API 视角 ============ -->
-      <section class="note-section" id="api-perspective">
-        <h2>5&nbsp;&nbsp;从 API 视角看上下文的构成（2.2.5）</h2>
-        <p>
-          通过上面的例子，我们可以清晰地看到 Agent 每次调用模型时，上下文的完整构成：
-        </p>
-        <div class="boundary-grid" aria-label="静态前缀与轨迹">
-          <article class="boundary-card primary">
-            <span class="question">静态前缀（每一轮都不变）</span>
-            <h3>System Prompt + Tool Definitions</h3>
-            <p>上半部分（System Prompt + Tool Definitions）在整个对话过程中保持不变。</p>
-            <ul>
-              <li>前缀不能动——<strong>利于 KV Cache</strong>（2.3 节展开）</li>
-              <li>对应第一章的“系统提示词 + 工具定义”两个组成部分</li>
+        <!-- ============ 5. API 视角 ============ -->
+        <section class="note-section" id="api-perspective">
+            <h2>5&nbsp;&nbsp;从 API 视角看上下文的构成</h2>
+            <p>
+                通过上面的例子，我们可以清晰地看到 Agent 每次调用模型时，上下文的完整构成：
+            </p>
+            <figure class="figure-center">
+                <img src="images/第二章·1.4.png" width="800">
+                <figcaption>图 3：Agent 每次调用模型时的上下文构成</figcaption>
+            </figure>
+            <div class="boundary-grid" aria-label="静态前缀与轨迹">
+                <article class="boundary-card primary">
+                    <span class="question">静态前缀（每一轮都不变）</span>
+                    <h3>System Prompt + Tool Definitions</h3>
+                    <p>上半部分（System Prompt + Tool Definitions）在整个对话过程中保持不变。</p>
+                    <ul>
+                        <li>前缀不能动——<strong>利于 KV Cache</strong>（2.3 节展开）</li>
+                        <li>对应第一章的“系统提示词 + 工具定义”两个组成部分</li>
+                    </ul>
+                </article>
+                <article class="boundary-card">
+                    <span class="question">轨迹（随交互不断增长 →）</span>
+                    <h3>user · assistant · tool 结果 · user · …</h3>
+                    <p>下半部分（对话历史，即第一章定义的轨迹）随着交互的进行不断增长。</p>
+                    <ul>
+                        <li>轨迹<strong>可压缩</strong>（2.7 节展开）</li>
+                        <li>对应第一章的“用户消息、模型回复、工具执行结果”三个组成部分</li>
+                    </ul>
+                </article>
+            </div>
+            <p>
+                这个“静态前缀 + 轨迹”的结构，是后续讨论 KV Cache 优化、上下文压缩等技术的基础——<strong>理解了这个结构，就能理解为什么“前面不能动、后面可以压缩”</strong>。
+            </p>
+        </section>
+
+        <!-- ============ 6. 实验 2-1 ============ -->
+        <section class="note-section" id="experiment">
+            <h2>6&nbsp;&nbsp;实验 2-1 ★：本地 LLM 服务部署与工具调用</h2>
+            <p>
+                在深入理解 Agent 上下文之前，先通过一个实际项目来体验小型模型的能力。local_llm_serving 项目展示了一个重要的观点：<strong>具备思维链（CoT）思考和工具调用能力的模型并不一定需要很大的参数量</strong>。即使是
+                0.6B（六亿）参数的超小模型，在合理的提示词设计和系统架构下，也能展现出令人满意的工具调用能力。
+            </p>
+            <div class="example-meta" aria-label="实验架构">
+                <span>🖥 用户请求 → 本地 LLM 服务</span>
+                <span>🧩 vLLM / Ollama（OpenAI 兼容）</span>
+                <span>⚙️ 决定并生成 tool_call → 本地工具执行</span>
+            </div>
+            <p>通过这个实验，你应该能够观察到：</p>
+            <ul class="checklist" aria-label="实验观察点">
+                <li><strong>小模型的能力</strong>：0.6B 的模型在适当的提示工程下也能准确理解并执行工具调用</li>
+                <li><strong>性能表现</strong>：在作者所用苹果 M2 芯片上，模型能以超过每秒 100 个 token 的速度生成响应。Token
+                    是模型处理文本的基本单位——一个中文字通常对应 1-2 个 token，一个英文单词通常对应 1-3 个 token
+                </li>
+                <li><strong>ReAct 循环</strong>：观察模型如何通过多轮思考和工具调用来解决复杂问题</li>
+                <li><strong>流式响应的优势</strong>：流式输出让用户实时看到模型的思考过程，包括工具调用的决策和结果的处理
+                </li>
+                <li><strong>KV Cache 的影响（顺带留意）</strong>：保持系统提示词不变连续发起两次对话，记录第二次的首 token
+                    延迟；再修改系统提示词开头任意几个字符发起一次对话对比——前者因前缀缓存命中明显更快，后者需重新计算整个前缀
+                </li>
             </ul>
-          </article>
-          <article class="boundary-card">
-            <span class="question">轨迹（随交互不断增长 →）</span>
-            <h3>user · assistant · tool 结果 · user · …</h3>
-            <p>下半部分（对话历史，即第一章定义的轨迹）随着交互的进行不断增长。</p>
-            <ul>
-              <li>轨迹<strong>可压缩</strong>（2.7 节展开）</li>
-              <li>对应第一章的“用户消息、模型回复、工具执行结果”三个组成部分</li>
-            </ul>
-          </article>
-        </div>
-        <p>
-          这个“静态前缀 + 轨迹”的结构，是后续讨论 KV Cache 优化、上下文压缩等技术的基础——<strong>理解了这个结构，就能理解为什么“前面不能动、后面可以压缩”</strong>。
-        </p>
-      </section>
 
-      <!-- ============ 6. 实验 2-1 ============ -->
-      <section class="note-section" id="experiment">
-        <h2>6&nbsp;&nbsp;实验 2-1 ★：本地 LLM 服务部署与工具调用</h2>
-        <p>
-          在深入理解 Agent 上下文之前，先通过一个实际项目来体验小型模型的能力。local_llm_serving 项目展示了一个重要的观点：<strong>具备思维链（CoT）思考和工具调用能力的模型并不一定需要很大的参数量</strong>。即使是 0.6B（六亿）参数的超小模型，在合理的提示词设计和系统架构下，也能展现出令人满意的工具调用能力。
-        </p>
-        <div class="example-meta" aria-label="实验架构">
-          <span>🖥 用户请求 → 本地 LLM 服务</span>
-          <span>🧩 vLLM / Ollama（OpenAI 兼容）</span>
-          <span>⚙️ 决定并生成 tool_call → 本地工具执行</span>
-        </div>
-        <p>通过这个实验，你应该能够观察到：</p>
-        <ul class="checklist" aria-label="实验观察点">
-          <li><strong>小模型的能力</strong>：0.6B 的模型在适当的提示工程下也能准确理解并执行工具调用</li>
-          <li><strong>性能表现</strong>：在作者所用苹果 M2 芯片上，模型能以超过每秒 100 个 token 的速度生成响应。Token 是模型处理文本的基本单位——一个中文字通常对应 1-2 个 token，一个英文单词通常对应 1-3 个 token</li>
-          <li><strong>ReAct 循环</strong>：观察模型如何通过多轮思考和工具调用来解决复杂问题</li>
-          <li><strong>流式响应的优势</strong>：流式输出让用户实时看到模型的思考过程，包括工具调用的决策和结果的处理</li>
-          <li><strong>KV Cache 的影响（顺带留意）</strong>：保持系统提示词不变连续发起两次对话，记录第二次的首 token 延迟；再修改系统提示词开头任意几个字符发起一次对话对比——前者因前缀缓存命中明显更快，后者需重新计算整个前缀</li>
-        </ul>
+            <h3>在 API 层面不可见的细节</h3>
+            <p>
+                本地部署实验中，API 消息会被服务端（vLLM、Ollama）自动转换为模型内部的 token 格式。local_llm_serving
+                项目允许你直接观察模型的原始输入输出 token 流：
+            </p>
+            <div class="component-grid" aria-label="token 流细节">
+                <article class="component-card core">
+                    <span class="index">① 内部思考过程</span>
+                    <h3>&lt;think&gt; 标签内的思考</h3>
+                    <p>支持思维链的模型（如 Qwen3）在生成工具调用之前，会先分析用户意图、评估哪些工具适用、规划调用顺序。这个思考过程对调试
+                        Agent 行为非常有价值。</p>
+                </article>
+                <article class="component-card">
+                    <span class="index">② 输出的顺序结构</span>
+                    <h3>思考 → 文本 → 工具调用</h3>
+                    <p>模型输出按固定顺序生成：先内部思考（<code>&lt;think&gt;</code>
+                        内），再给用户的文本回复，最后是工具调用请求。第一个工具调用的参数一经生成完整、通过校验，即可立即开始执行，无需等待后续工具调用。
+                    </p>
+                </article>
+                <article class="component-card">
+                    <span class="index">③ 并行工具调用</span>
+                    <h3>无依赖则同时生成</h3>
+                    <p>在温哥华时间和天气的例子中，模型发现两个子问题无依赖，一次输出同时生成两个工具调用请求，Agent
+                        框架检测后可并行执行，实现流水线式加速。</p>
+                </article>
+                <article class="component-card">
+                    <span class="index">④ 终止判断</span>
+                    <h3>信息是否足够？</h3>
+                    <p>工具结果送回后，模型判断是否已有足够信息回答。够了直接输出最终回复；不够则继续输出新的工具调用请求，触发下一轮
+                        ReAct 循环。</p>
+                </article>
+            </div>
 
-        <h3>在 API 层面不可见的细节</h3>
-        <p>
-          本地部署实验中，API 消息会被服务端（vLLM、Ollama）自动转换为模型内部的 token 格式。local_llm_serving 项目允许你直接观察模型的原始输入输出 token 流：
-        </p>
-        <div class="component-grid" aria-label="token 流细节">
-          <article class="component-card core">
-            <span class="index">① 内部思考过程</span>
-            <h3>&lt;think&gt; 标签内的思考</h3>
-            <p>支持思维链的模型（如 Qwen3）在生成工具调用之前，会先分析用户意图、评估哪些工具适用、规划调用顺序。这个思考过程对调试 Agent 行为非常有价值。</p>
-          </article>
-          <article class="component-card">
-            <span class="index">② 输出的顺序结构</span>
-            <h3>思考 → 文本 → 工具调用</h3>
-            <p>模型输出按固定顺序生成：先内部思考（<code>&lt;think&gt;</code> 内），再给用户的文本回复，最后是工具调用请求。第一个工具调用的参数一经生成完整、通过校验，即可立即开始执行，无需等待后续工具调用。</p>
-          </article>
-          <article class="component-card">
-            <span class="index">③ 并行工具调用</span>
-            <h3>无依赖则同时生成</h3>
-            <p>在温哥华时间和天气的例子中，模型发现两个子问题无依赖，一次输出同时生成两个工具调用请求，Agent 框架检测后可并行执行，实现流水线式加速。</p>
-          </article>
-          <article class="component-card">
-            <span class="index">④ 终止判断</span>
-            <h3>信息是否足够？</h3>
-            <p>工具结果送回后，模型判断是否已有足够信息回答。够了直接输出最终回复；不够则继续输出新的工具调用请求，触发下一轮 ReAct 循环。</p>
-          </article>
-        </div>
+            <div class="callout success" aria-label="实验总结">
+                <span class="callout-title">📌 实验总结</span>
+                <p><strong>0.6B 的小模型，在合理的提示词设计下，也能可靠地完成工具调用。</strong>模型大小固然重要，但不是唯一的决定因素。一些高端移动设备已经能运行
+                    0.6B 级别的小模型，端侧模型的可用能力也在持续提升——<strong>端侧 Agent
+                        的时代比大多数人预期的更近</strong>。修改系统提示词后首次响应变慢的现象，正是下一节 KV Cache
+                    机制的主题：改变前缀会导致缓存失效，模型需要重新计算。</p>
+            </div>
+        </section>
 
-        <div class="callout success" aria-label="实验总结">
-          <span class="callout-title">📌 实验总结</span>
-          <p><strong>0.6B 的小模型，在合理的提示词设计下，也能可靠地完成工具调用。</strong>模型大小固然重要，但不是唯一的决定因素。一些高端移动设备已经能运行 0.6B 级别的小模型，端侧模型的可用能力也在持续提升——<strong>端侧 Agent 的时代比大多数人预期的更近</strong>。修改系统提示词后首次响应变慢的现象，正是下一节 KV Cache 机制的主题：改变前缀会导致缓存失效，模型需要重新计算。</p>
-        </div>
-      </section>
+        <!-- ============ 参考资料 ============ -->
+        <section class="note-section" id="references">
+            <h2>参考资料</h2>
+            <div class="sources-list">
+                <ul>
+                    <li>OpenAI Chat Completions API 文档 —— messages 角色与 tool_calls 协议</li>
+                </ul>
+            </div>
+        </section>
 
-      <!-- ============ 参考资料 ============ -->
-      <section class="note-section" id="references">
-        <h2>参考资料</h2>
-        <div class="sources-list">
-          <ul>
-            <li>OpenAI Chat Completions API 文档 —— messages 角色与 tool_calls 协议</li>
-            <li>李博杰，《深入理解 AI Agent：设计原理与工程实践》——第 2 章 2.2 节</li>
-          </ul>
-        </div>
-        <p class="source-note">
-          说明：本页为对原书 2.2 节内容的结构化重组与学习笔记式归纳，JSON / 代码示例为笔记式精简呈现，并非原文逐段转载；接口协议以原书及厂商文档为准。
-        </p>
-      </section>
-
-      <a href="#top" class="back-to-top">↑ 返回顶部</a>
+        <a href="#top" class="back-to-top">↑ 返回顶部</a>
     </main>
-  </div>
+</div>
 
-  <script>
+<script>
     (function () {
-      function copyText(btn, target) {
-        var text = target.innerText;
-        function done(ok) {
-          btn.classList.add(ok ? 'copied' : 'copy-failed');
-          btn.textContent = ok ? '已复制 ✓' : '复制失败';
-          setTimeout(function () {
-            btn.classList.remove('copied', 'copy-failed');
-            btn.textContent = '复制代码';
-          }, 1600);
+        function copyText(btn, target) {
+            var text = target.innerText;
+
+            function done(ok) {
+                btn.classList.add(ok ? 'copied' : 'copy-failed');
+                btn.textContent = ok ? '已复制 ✓' : '复制失败';
+                setTimeout(function () {
+                    btn.classList.remove('copied', 'copy-failed');
+                    btn.textContent = '复制代码';
+                }, 1600);
+            }
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function () {
+                    done(true);
+                }, function () {
+                    done(false);
+                });
+            } else {
+                var ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                try {
+                    document.execCommand('copy');
+                    done(true);
+                } catch (e) {
+                    done(false);
+                }
+                document.body.removeChild(ta);
+            }
         }
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
-        } else {
-          var ta = document.createElement('textarea');
-          ta.value = text;
-          document.body.appendChild(ta);
-          ta.select();
-          try { document.execCommand('copy'); done(true); }
-          catch (e) { done(false); }
-          document.body.removeChild(ta);
-        }
-      }
-      document.querySelectorAll('.copy-btn[data-copy-target]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          var target = document.getElementById(btn.getAttribute('data-copy-target'));
-          if (target) copyText(btn, target);
+
+        document.querySelectorAll('.copy-btn[data-copy-target]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var target = document.getElementById(btn.getAttribute('data-copy-target'));
+                if (target) copyText(btn, target);
+            });
         });
-      });
     })();
-  </script>
+</script>
 </body>
 </html>
